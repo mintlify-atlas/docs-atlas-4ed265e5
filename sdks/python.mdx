@@ -1,0 +1,477 @@
+---
+title: Python SDK
+description: High-performance DataFrame engine for Python powered by Rust
+---
+
+## Installation
+
+Install PardoX via pip:
+
+```bash
+pip install pardox
+```
+
+Or from source:
+
+```bash
+cd pardox_project
+pip install -e .
+```
+
+## Quick Start
+
+```python
+import pardox as px
+
+# Create DataFrame from list of dictionaries
+df = px.DataFrame([
+    {"name": "Alice", "age": 30, "score": 85.5},
+    {"name": "Bob", "age": 25, "score": 92.0},
+    {"name": "Charlie", "age": 35, "score": 78.5}
+])
+
+# Display the DataFrame
+print(df)
+```
+
+## Core Exports
+
+The Python SDK exports the following from `pardox/__init__.py`:
+
+```python
+from pardox import DataFrame, Series, read_csv, read_sql, from_arrow, read_prdx
+```
+
+**Available imports:**
+- `DataFrame` - Main DataFrame class
+- `Series` - Column operations and vectorized arithmetic
+- `read_csv()` - Native CSV reader
+- `read_sql()` - Direct SQL query execution
+- `from_arrow()` - Zero-copy Arrow ingestion
+- `read_prdx()` - PardoX binary format reader
+
+## DataFrame Creation
+
+### From In-Memory Data
+
+```python
+import pardox as px
+
+# From list of dicts (converted to NDJSON internally)
+df = px.DataFrame([
+    {"product": "Laptop", "price": 999.99, "quantity": 5},
+    {"product": "Mouse", "price": 29.99, "quantity": 50},
+    {"product": "Keyboard", "price": 79.99, "quantity": 25}
+])
+
+print(df.shape)  # (3, 3)
+print(df.columns)  # ['product', 'price', 'quantity']
+print(df.dtypes)  # {'product': 'Utf8', 'price': 'Float64', 'quantity': 'Int64'}
+```
+
+### From CSV Files
+
+```python
+import pardox as px
+
+# Basic CSV reading
+df = px.read_csv("sales.csv")
+
+# With manual schema
+df = px.read_csv("sales.csv", schema={
+    "id": "Int64",
+    "name": "Utf8",
+    "amount": "Float64"
+})
+```
+
+### From SQL Databases
+
+```python
+import pardox as px
+
+# PostgreSQL
+df = px.read_sql(
+    "postgresql://user:pass@localhost:5432/mydb",
+    "SELECT * FROM orders WHERE total > 1000"
+)
+
+# MySQL (native driver)
+df = px.read_mysql(
+    "mysql://user:pass@localhost:3306/mydb",
+    "SELECT * FROM customers"
+)
+
+# SQL Server (tiberius driver)
+df = px.read_sqlserver(
+    "Server=localhost;Database=mydb;User Id=sa;Password=pwd;TrustServerCertificate=true",
+    "SELECT * FROM inventory"
+)
+
+# MongoDB (native driver)
+df = px.read_mongodb(
+    "mongodb://user:pass@localhost:27017",
+    "mydb.orders"  # database.collection
+)
+```
+
+### From Apache Arrow
+
+```python
+import pardox as px
+import pyarrow as pa
+
+# From PyArrow Table (zero-copy)
+arrow_table = pa.Table.from_pandas(pandas_df)
+df = px.from_arrow(arrow_table)
+
+# From RecordBatch
+batch = arrow_table.to_batches()[0]
+df = px.from_arrow(batch)
+```
+
+## DataFrame Operations
+
+### Inspection
+
+```python
+# Display first/last rows
+df.head(10).show()
+df.tail(5).show()
+
+# Get dimensions
+rows, cols = df.shape
+
+# Column metadata
+print(df.columns)  # ['name', 'age', 'score']
+print(df.dtypes)   # {'name': 'Utf8', 'age': 'Int64', 'score': 'Float64'}
+```
+
+### Slicing with iloc
+
+```python
+# Slice rows by position
+subset = df.iloc[100:200]  # Returns new DataFrame
+
+# Head/tail return new DataFrames
+first_10 = df.iloc[0:10]
+last_10 = df.iloc[-10:]
+```
+
+### Column Selection
+
+```python
+# Get a Series (column view)
+ages = df["age"]
+print(type(ages))  # <class 'pardox.series.Series'>
+
+# Series metadata
+print(ages.dtype)  # 'Int64'
+print(ages.name)   # 'age'
+```
+
+### Filtering with Boolean Series
+
+```python
+# Create boolean mask
+mask = df["age"] > 25
+
+# Apply filter (returns new DataFrame)
+filtered = df[mask]
+
+# Multiple conditions
+filtered = df[(df["age"] > 25) & (df["score"] > 80)]
+```
+
+### Column Assignment
+
+```python
+# Add new column from Series arithmetic
+df["double_age"] = df["age"] * 2
+
+# Compute from multiple columns
+df["total"] = df["price"] * df["quantity"]
+```
+
+## Series Operations
+
+### Arithmetic (Vectorized)
+
+```python
+# Series arithmetic returns new Series
+result = df["price"] + df["tax"]
+result = df["amount"] - df["discount"]
+result = df["quantity"] * df["unit_price"]
+result = df["total"] / df["count"]
+result = df["value"] % df["divisor"]
+
+# Assign result back to DataFrame
+df["net_price"] = df["price"] - df["discount"]
+```
+
+### Comparisons
+
+```python
+# All comparisons return Boolean Series
+mask = df["price"] > 100
+mask = df["age"] >= 18
+mask = df["status"] == "active"
+mask = df["score"] != 0
+mask = df["amount"] < 500
+mask = df["rating"] <= 5
+
+# Column vs Column
+mask = df["price"] > df["cost"]
+
+# Use mask for filtering
+expensive = df[df["price"] > 1000]
+```
+
+### Aggregations
+
+```python
+# Statistical aggregations
+total_sales = df["amount"].sum()
+average_age = df["age"].mean()
+min_price = df["price"].min()
+max_score = df["score"].max()
+row_count = df["id"].count()
+std_dev = df["score"].std()
+```
+
+## Math Operations
+
+### Native Math Foundation (v0.3.1)
+
+```python
+# Columnar addition (SIMD-optimized)
+result_df = df.add("price", "tax")
+print(result_df["result_math_add"])
+
+# Columnar subtraction
+result_df = df.sub("revenue", "cost")
+print(result_df["result_math_sub"])
+
+# Columnar multiplication
+result_df = df.mul("quantity", "unit_price")
+print(result_df["result_mul"])
+
+# Standard deviation (Bessel-corrected)
+std_value = df.std("scores")
+
+# Min-Max Scaling to [0, 1]
+normalized_df = df.min_max_scale("amount")
+print(normalized_df["result_minmax"])
+```
+
+## Sorting
+
+```python
+# CPU sort (ascending)
+sorted_df = df.sort_values("age")
+
+# Descending order
+sorted_df = df.sort_values("amount", ascending=False)
+
+# GPU-accelerated Bitonic sort (for large datasets)
+sorted_df = df.sort_values("price", gpu=True)
+```
+
+## Joins
+
+```python
+# Hash join on common column
+result = df.join(other_df, on="customer_id")
+
+# With different column names
+result = df.join(
+    other_df,
+    left_on="product_id",
+    right_on="id"
+)
+```
+
+## Data Cleaning
+
+```python
+# Fill nulls in numeric columns
+df.fillna(0.0)
+
+# Round all numeric columns
+df.round(2)  # 2 decimal places
+
+# Type casting
+df.cast("age", "Int64")
+df.cast("price", "Float64")
+```
+
+## Export
+
+### To CSV
+
+```python
+df.to_csv("output.csv")
+```
+
+### To Native Binary (.prdx)
+
+```python
+# Write to PardoX binary format
+df.to_prdx("data.prdx")
+
+# Read back (much faster than CSV)
+df = px.read_prdx("data.prdx")
+```
+
+### To SQL Databases
+
+```python
+# PostgreSQL - Append mode
+rows = df.to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "sales",
+    mode="append"
+)
+
+# Upsert with conflict resolution
+rows = df.to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "users",
+    mode="upsert",
+    conflict_cols=["id"]
+)
+
+# MySQL
+rows = df.to_mysql(
+    "mysql://user:pass@localhost:3306/mydb",
+    "products",
+    mode="append"
+)
+
+# SQL Server
+rows = df.to_sqlserver(
+    "Server=localhost;Database=mydb;User Id=sa;Password=pwd;",
+    "inventory"
+)
+
+# MongoDB
+rows = df.to_mongodb(
+    "mongodb://user:pass@localhost:27017",
+    "mydb.orders",
+    mode="append"  # or "replace"
+)
+```
+
+### To Python Objects
+
+```python
+# List of dictionaries (records format)
+records = df.to_dict()
+# [{"name": "Alice", "age": 30}, ...]
+
+# List of lists (values format)
+values = df.tolist()
+# [["Alice", 30], ["Bob", 25], ...]
+
+# JSON string
+json_str = df.to_json()
+# '[{"name":"Alice","age":30}, ...]'
+```
+
+## Observer Methods (v0.3.1)
+
+```python
+# Value counts (frequency distribution)
+freq = df.value_counts("category")
+# {"Electronics": 150, "Clothing": 100, ...}
+
+# Unique values
+unique_vals = df.unique("status")
+# ["active", "pending", "completed"]
+```
+
+## Zero-Copy NumPy Integration
+
+PardoX Series support the NumPy array protocol (`__array__`) for zero-copy interoperability:
+
+```python
+import numpy as np
+import pardox as px
+
+df = px.read_csv("data.csv")
+
+# Zero-copy conversion to NumPy (no data duplication)
+arr = np.array(df["scores"])  # Wraps Rust buffer directly
+
+# Now use with scikit-learn, TensorFlow, etc.
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+scaled = scaler.fit_transform(arr.reshape(-1, 1))
+```
+
+## Error Handling
+
+```python
+import pardox as px
+
+try:
+    df = px.read_csv("missing_file.csv")
+except FileNotFoundError as e:
+    print(f"File not found: {e}")
+except RuntimeError as e:
+    print(f"PardoX Core error: {e}")
+```
+
+## Method Signatures
+
+Key method signatures from `frame.py`:
+
+```python
+class DataFrame:
+    def __init__(self, data, schema=None): ...
+    def head(self, n=5) -> 'DataFrame': ...
+    def tail(self, n=5) -> 'DataFrame': ...
+    def show(self, n=10): ...
+    
+    @property
+    def shape(self) -> tuple: ...
+    
+    @property
+    def columns(self) -> list: ...
+    
+    @property
+    def dtypes(self) -> dict: ...
+    
+    @property
+    def iloc(self) -> '_IlocIndexer': ...
+    
+    def cast(self, col_name: str, target_type: str) -> 'DataFrame': ...
+    def join(self, other, on=None, left_on=None, right_on=None, how="inner") -> 'DataFrame': ...
+    def to_csv(self, path_or_buf: str) -> bool: ...
+    def to_sql(self, connection_string: str, table_name: str, mode: str = "append", conflict_cols: list = None) -> int: ...
+    def to_prdx(self, path_or_buf: str) -> bool: ...
+    def to_dict(self) -> list: ...
+    def tolist(self) -> list: ...
+    def to_json(self) -> str: ...
+    def value_counts(self, col: str) -> dict: ...
+    def unique(self, col: str) -> list: ...
+    def add(self, col_a: str, col_b: str) -> 'DataFrame': ...
+    def sub(self, col_a: str, col_b: str) -> 'DataFrame': ...
+    def mul(self, col_a: str, col_b: str) -> 'DataFrame': ...
+    def std(self, col: str) -> float: ...
+    def min_max_scale(self, col: str) -> 'DataFrame': ...
+    def sort_values(self, by: str, ascending: bool = True, gpu: bool = False) -> 'DataFrame': ...
+    def fillna(self, value: float) -> 'DataFrame': ...
+    def round(self, decimals: int = 0) -> 'DataFrame': ...
+```
+
+## Platform Support
+
+The Python SDK automatically detects your platform and loads the correct binary:
+
+- **Linux x64**: `pardox-cpu-Linux-x64.so`, `pardox-gpu-Linux-x64.so`
+- **macOS Intel**: `pardox-cpu-MacOS-Intel.dylib`, `pardox-gpu-MacOS-Intel.dylib`
+- **macOS ARM64**: `pardox-cpu-MacOS-ARM64.dylib`, `pardox-gpu-MacOS-ARM64.dylib`
+- **Windows x64**: `pardox-cpu-Windows-x64.dll`, `pardox-gpu-Windows-x64.dll`
+
+Binaries are located in `pardox/libs/{platform}/`.

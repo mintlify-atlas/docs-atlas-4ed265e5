@@ -1,0 +1,555 @@
+---
+title: PHP SDK
+description: High-performance DataFrame engine for PHP powered by Rust FFI
+---
+
+## Installation
+
+Install PardoX via Composer:
+
+```bash
+composer require pardox/pardox-php
+```
+
+**Requirements:**
+- PHP 8.1 or higher
+- FFI extension enabled (`ffi.enable=1` in php.ini)
+
+## Quick Start
+
+```php
+<?php
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use PardoX\DataFrame;
+
+// Create DataFrame from array of associative arrays
+$data = [
+    ["name" => "Alice", "age" => 30, "score" => 85.5],
+    ["name" => "Bob", "age" => 25, "score" => 92.0],
+    ["name" => "Charlie", "age" => 35, "score" => 78.5]
+];
+
+$df = new DataFrame($data);
+
+echo $df->show();
+```
+
+## Core Classes
+
+The PHP SDK provides the following classes:
+
+- `PardoX\DataFrame` - Main DataFrame class
+- `PardoX\Series` - Column operations and vectorized arithmetic
+- `PardoX\IO` - I/O helpers for reading/writing files and databases
+
+## DataFrame Creation
+
+### From In-Memory Data
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// From array of associative arrays
+$df = new DataFrame([
+    ["product" => "Laptop", "price" => 999.99, "quantity" => 5],
+    ["product" => "Mouse", "price" => 29.99, "quantity" => 50],
+    ["product" => "Keyboard", "price" => 79.99, "quantity" => 25]
+]);
+
+$shape = $df->shape;  // [3, 3]
+print_r($df->columns);  // ['product', 'price', 'quantity']
+print_r($df->dtypes);   // ['product' => 'Utf8', 'price' => 'Float64', 'quantity' => 'Int64']
+```
+
+### From CSV Files
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// Basic CSV reading
+$df = DataFrame::read_csv("sales.csv");
+
+// With manual schema
+$df = DataFrame::read_csv("sales.csv", [
+    "id" => "Int64",
+    "name" => "Utf8",
+    "amount" => "Float64"
+]);
+```
+
+### From SQL Databases
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// PostgreSQL
+$df = DataFrame::read_sql(
+    "postgresql://user:pass@localhost:5432/mydb",
+    "SELECT * FROM orders WHERE total > 1000"
+);
+
+// MySQL (native driver)
+$df = DataFrame::read_mysql(
+    "mysql://user:pass@localhost:3306/mydb",
+    "SELECT * FROM customers"
+);
+
+// SQL Server (tiberius driver)
+$df = DataFrame::read_sqlserver(
+    "Server=localhost;Database=mydb;User Id=sa;Password=pwd;TrustServerCertificate=true",
+    "SELECT * FROM inventory"
+);
+
+// MongoDB (native driver)
+$df = DataFrame::read_mongodb(
+    "mongodb://user:pass@localhost:27017",
+    "mydb.orders"  // database.collection
+);
+```
+
+## DataFrame Operations
+
+### Inspection
+
+```php
+<?php
+
+// Display first/last rows
+echo $df->head(10)->show();
+echo $df->tail(5)->show();
+
+// Get dimensions
+$shape = $df->shape;  // [rows, cols]
+echo "Rows: {$shape[0]}, Cols: {$shape[1]}";
+
+// Column metadata
+print_r($df->columns);  // ['name', 'age', 'score']
+print_r($df->dtypes);   // ['name' => 'Utf8', 'age' => 'Int64', 'score' => 'Float64']
+```
+
+### Slicing with iloc
+
+```php
+<?php
+
+// Slice rows by position
+$subset = $df->iloc(100, 200);  // Returns new DataFrame
+
+// Head/tail return new DataFrames
+$first10 = $df->head(10);
+$last10 = $df->tail(10);
+```
+
+### Column Selection (ArrayAccess)
+
+The PHP SDK implements ArrayAccess for subscript syntax:
+
+```php
+<?php
+
+// Get a Series (column view) using subscript
+$ages = $df["age"];
+
+echo $ages->dtype;  // 'Int64'
+echo $ages->name;   // 'age'
+```
+
+### Filtering with Boolean Series
+
+```php
+<?php
+
+// Create boolean mask
+$mask = $df["age"]->gt(25);
+
+// Apply filter (returns new DataFrame)
+$filtered = $df->filter($mask);
+```
+
+### Column Assignment (ArrayAccess)
+
+```php
+<?php
+
+// Add new column from Series arithmetic
+$df["doubleAge"] = $df["age"]->mul($df["age"]);
+
+// Compute from multiple columns
+$df["total"] = $df["price"]->mul($df["quantity"]);
+```
+
+## Series Operations
+
+### Arithmetic (Vectorized)
+
+```php
+<?php
+
+// Series arithmetic returns new Series
+$result = $df["price"]->add($df["tax"]);
+$result = $df["amount"]->sub($df["discount"]);
+$result = $df["quantity"]->mul($df["unitPrice"]);
+$result = $df["total"]->div($df["count"]);
+$result = $df["value"]->mod($df["divisor"]);
+
+// Assign result back to DataFrame
+$df["netPrice"] = $df["price"]->sub($df["discount"]);
+```
+
+### Comparisons
+
+```php
+<?php
+
+// All comparisons return Boolean Series
+$mask = $df["price"]->gt(100);        // >
+$mask = $df["age"]->gte(18);          // >=
+$mask = $df["status"]->eq("active");  // ==
+$mask = $df["score"]->neq(0);         // !=
+$mask = $df["amount"]->lt(500);       // <
+$mask = $df["rating"]->lte(5);        // <=
+
+// Column vs Column
+$mask = $df["price"]->gt($df["cost"]);
+
+// Use mask for filtering
+$expensive = $df->filter($df["price"]->gt(1000));
+```
+
+### Aggregations
+
+```php
+<?php
+
+// Statistical aggregations
+$totalSales = $df["amount"]->sum();
+$averageAge = $df["age"]->mean();
+$minPrice = $df["price"]->min();
+$maxScore = $df["score"]->max();
+$rowCount = $df["id"]->count();
+$stdDev = $df["score"]->std();
+```
+
+## Math Operations
+
+### Native Math Foundation
+
+```php
+<?php
+
+// Columnar addition (SIMD-optimized)
+$resultDf = $df->add("price", "tax");
+print_r($resultDf->columns);  // includes 'result_math_add'
+
+// Columnar subtraction
+$resultDf = $df->sub("revenue", "cost");
+echo $resultDf["result_math_sub"];
+
+// Standard deviation
+$stdValue = $df->std("scores");
+
+// Min-Max Scaling to [0, 1]
+$normalized = $df->minMaxScale("amount");
+echo $normalized["result_minmax"];
+```
+
+## Sorting
+
+```php
+<?php
+
+// CPU sort (ascending)
+$sorted = $df->sortValues("age");
+
+// Descending order
+$sorted = $df->sortValues("amount", false);
+
+// GPU-accelerated Bitonic sort (for large datasets)
+$sorted = $df->sortValues("price", false, true);
+```
+
+## Joins
+
+```php
+<?php
+
+// Hash join on common column
+$result = $df->join($otherDf, ["on" => "customerId"]);
+
+// With different column names
+$result = $df->join($otherDf, [
+    "leftOn" => "productId",
+    "rightOn" => "id"
+]);
+```
+
+## Data Cleaning
+
+```php
+<?php
+
+// Fill nulls in numeric columns
+$df->fillna(0.0);
+
+// Round all numeric columns
+$df->round(2);  // 2 decimal places
+
+// Type casting
+$df->cast("age", "Int64");
+$df->cast("price", "Float64");
+```
+
+## Export
+
+### To CSV
+
+```php
+<?php
+
+$df->to_csv("output.csv");
+```
+
+### To Native Binary (.prdx)
+
+```php
+<?php
+
+use PardoX\IO;
+
+// Write to PardoX binary format
+$df->to_prdx("data.prdx");
+
+// Read back (much faster than CSV)
+$data = IO::read_prdx("data.prdx");
+$df = new DataFrame($data);
+```
+
+### To SQL Databases
+
+```php
+<?php
+
+// PostgreSQL - Append mode
+$rows = $df->to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "sales",
+    "append"
+);
+
+// Upsert with conflict resolution
+$rows = $df->to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "users",
+    "upsert",
+    ["id"]  // conflict columns
+);
+
+// MySQL
+$rows = $df->to_mysql(
+    "mysql://user:pass@localhost:3306/mydb",
+    "products",
+    "append"
+);
+
+// SQL Server
+$rows = $df->to_sqlserver(
+    "Server=localhost;Database=mydb;User Id=sa;Password=pwd;",
+    "inventory"
+);
+
+// MongoDB
+$rows = $df->to_mongodb(
+    "mongodb://user:pass@localhost:27017",
+    "mydb.orders",
+    "append"  // or "replace"
+);
+```
+
+### To PHP Arrays
+
+```php
+<?php
+
+// Array of associative arrays (records format)
+$records = $df->to_dict();
+// [["name" => "Alice", "age" => 30], ...]
+
+// Array of arrays (values format)
+$values = $df->tolist();
+// [["Alice", 30], ["Bob", 25], ...]
+
+// JSON string
+$jsonStr = $df->to_json();
+// '[{"name":"Alice","age":30}, ...]'
+```
+
+## Observer Methods
+
+```php
+<?php
+
+// Value counts (frequency distribution)
+$freq = $df->value_counts("category");
+// ["Electronics" => 150, "Clothing" => 100, ...]
+
+// Unique values
+$uniqueVals = $df->unique("status");
+// ["active", "pending", "completed"]
+```
+
+## Execute SQL Statements
+
+```php
+<?php
+
+use PardoX\IO;
+
+// PostgreSQL DDL/DML
+$rowsAffected = IO::execute_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "CREATE TABLE users (id INT, name TEXT)"
+);
+
+// MySQL
+$rowsAffected = IO::execute_mysql(
+    "mysql://user:pass@localhost:3306/mydb",
+    "UPDATE products SET price = price * 1.1"
+);
+
+// SQL Server
+$rowsAffected = IO::execute_sqlserver(
+    "Server=localhost;Database=mydb;User Id=sa;Password=pwd;",
+    "DELETE FROM logs WHERE created < '2023-01-01'"
+);
+
+// MongoDB
+$result = IO::execute_mongodb(
+    "mongodb://user:pass@localhost:27017",
+    "mydb",
+    '{"drop": "old_collection"}'
+);
+```
+
+## Error Handling
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+try {
+    $df = DataFrame::read_csv("missing_file.csv");
+} catch (RuntimeException $e) {
+    echo "Error: " . $e->getMessage();
+}
+
+// Check if DataFrame is empty
+if ($df->shape[0] === 0) {
+    echo "DataFrame is empty";
+}
+```
+
+## Memory Management
+
+PardoX PHP SDK manages Rust memory automatically. DataFrames are freed when the PHP object is destroyed:
+
+```php
+<?php
+
+$df = DataFrame::read_csv("large_file.csv");
+
+// Do operations...
+
+// Memory is automatically freed when $df goes out of scope
+unset($df);  // Or let PHP garbage collector handle it
+```
+
+## Method Signatures
+
+Key method signatures from the PHP SDK:
+
+```php
+class DataFrame implements ArrayAccess
+{
+    public function __construct(array $data)
+    
+    // Properties
+    public readonly array $shape;     // [rows, cols]
+    public readonly array $columns;   // ['col1', 'col2', ...]
+    public readonly array $dtypes;    // ['col1' => 'Int64', 'col2' => 'Utf8', ...]
+    
+    // Static factory methods
+    public static function read_csv(string $path, ?array $schema = null): self
+    public static function read_sql(string $connString, string $query): self
+    public static function read_mysql(string $connString, string $query): self
+    public static function read_sqlserver(string $connString, string $query): self
+    public static function read_mongodb(string $connString, string $dbDotCollection): self
+    
+    // Instance methods
+    public function head(int $n = 5): self
+    public function tail(int $n = 5): self
+    public function show(int $n = 10): string
+    public function iloc(int $start, int $end): self
+    public function cast(string $column, string $targetType): self
+    public function join(DataFrame $other, array $options): self
+    public function filter(Series $mask): self
+    public function fillna(float $value): self
+    public function round(int $decimals): self
+    public function to_csv(string $path): bool
+    public function to_prdx(string $path): bool
+    public function to_sql(string $connString, string $table, string $mode = 'append', array $conflictCols = []): int
+    public function to_mysql(string $connString, string $table, string $mode = 'append', array $conflictCols = []): int
+    public function to_sqlserver(string $connString, string $table, string $mode = 'append', array $conflictCols = []): int
+    public function to_mongodb(string $connString, string $dbDotCollection, string $mode = 'append'): int
+    public function to_dict(): array
+    public function tolist(): array
+    public function to_json(): string
+    public function value_counts(string $col): array
+    public function unique(string $col): array
+    public function add(string $colA, string $colB): self
+    public function sub(string $colA, string $colB): self
+    public function std(string $col): float
+    public function minMaxScale(string $col): self
+    public function sortValues(string $by, bool $ascending = true, bool $gpu = false): self
+    
+    // ArrayAccess implementation
+    public function offsetExists(mixed $offset): bool
+    public function offsetGet(mixed $offset): Series
+    public function offsetSet(mixed $offset, mixed $value): void
+    public function offsetUnset(mixed $offset): void
+}
+```
+
+## Platform Support
+
+The PHP SDK automatically detects your platform and loads the correct binary via FFI:
+
+- **Linux x64**: `libpardox.so`
+- **macOS Intel**: `libpardox.dylib`
+- **macOS Apple Silicon**: `libpardox.dylib`
+- **Windows x64**: `pardox.dll`
+
+Binaries should be accessible to the PHP FFI extension.
+
+## Performance Tips
+
+1. **Use `.prdx` format** for repeated reads - it's much faster than CSV
+2. **Use GPU sorting** for large datasets: `sortValues($col, false, true)`
+3. **Batch SQL writes** with `mode="append"`
+4. **Use `fillna()` before computations** to handle missing values
+5. **Enable OPcache** in production for faster FFI binding initialization:
+
+```php
+// In your bootstrap file
+if (function_exists('opcache_get_status')) {
+    opcache_compile_file(__DIR__ . '/vendor/autoload.php');
+}
+```

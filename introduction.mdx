@@ -1,0 +1,209 @@
+---
+title: Welcome to PardoX
+description: High-performance DataFrame engine powered by Rust with SDKs for Python, JavaScript, and PHP
+---
+
+<img
+  className="block dark:hidden"
+  src="/logo/light.svg"
+  alt="PardoX Logo"
+  width={200}
+/>
+<img
+  className="hidden dark:block"
+  src="/logo/dark.svg"
+  alt="PardoX Logo"
+  width={200}
+/>
+
+# Welcome to PardoX
+
+**The speed of Rust. The simplicity of Python.**
+
+PardoX is a high-performance DataFrame engine designed for modern data engineering. It combines the safety and speed of a **Rust core** with the ease of use of Python, PHP, and Node.js SDKs — allowing you to process massive datasets and integrate with any database without learning a new language.
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Get started with PardoX in Python, Node.js, or PHP
+  </Card>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Build your first ETL pipeline in 5 minutes
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/python/dataframe"
+  >
+    Complete documentation for all SDKs
+  </Card>
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/betoalien/PardoX"
+  >
+    View source code and examples
+  </Card>
+</CardGroup>
+
+## Why PardoX?
+
+<CardGroup cols={2}>
+  <Card title="Zero-copy architecture" icon="bolt">
+    Data flows directly from disk or database into memory-mapped Rust buffers — no Python objects, no intermediate copies
+  </Card>
+  <Card title="SIMD acceleration" icon="microchip">
+    Mathematical operations use AVX2/NEON CPU instructions for 5x–20x speedups vs. Python loops
+  </Card>
+  <Card title="Universal compatibility" icon="globe">
+    Runs natively on Windows, Linux, and macOS (Intel & Apple Silicon)
+  </Card>
+  <Card title="Native database engine" icon="database">
+    Connect to PostgreSQL, MySQL, SQL Server, and MongoDB entirely through Rust — no Python database drivers required
+  </Card>
+  <Card title="Multi-SDK" icon="layer-group">
+    A single Rust core powers identical APIs in Python, Node.js, and PHP
+  </Card>
+  <Card title="Native format" icon="file-binary">
+    The `.prdx` binary format enables ~4.6 GB/s read throughput for repeated workloads
+  </Card>
+</CardGroup>
+
+## What's new in v0.3.1
+
+<AccordionGroup>
+  <Accordion title="Relational Conqueror">
+    Native read/write/execute for PostgreSQL, MySQL, SQL Server, and MongoDB via Rust drivers. No Python database packages required.
+  </Accordion>
+  <Accordion title="The Observer">
+    Full-DataFrame export with `to_dict()`, `to_json()`, `value_counts()`, and `unique()` — proper heap memory management for large datasets.
+  </Accordion>
+  <Accordion title="Native Math">
+    Pure Rust arithmetic operations: `add()`, `sub()`, `std()`, `min_max_scale()`, and `sort_values()` — vectorized for maximum performance.
+  </Accordion>
+  <Accordion title="GPU Awakening">
+    WebGPU Bitonic sort with `sort_values(gpu=True)` and automatic CPU fallback when GPU is unavailable.
+  </Accordion>
+  <Accordion title="ML Integration">
+    Zero-copy NumPy bridge via `__array__` protocol — direct pointer into Rust buffer for seamless integration with scikit-learn.
+  </Accordion>
+  <Accordion title="PHP & Node.js SDKs">
+    Full parity with Python SDK across all new features — same API, same performance.
+  </Accordion>
+</AccordionGroup>
+
+## Quick example
+
+<CodeGroup>
+
+```python Python
+import pardox as px
+
+# Load data — parallel Rust CSV parser
+df = px.read_csv("sales_data.csv")
+print(f"Loaded {df.shape[0]:,} rows × {df.shape[1]} columns")
+
+# Cast and compute
+df.cast("quantity", "Float64")
+revenue_df = df.mul("price", "quantity")
+
+# Statistics
+std_val = revenue_df.std("result_mul")
+print(f"Revenue std dev: {std_val:,.2f}")
+
+# Write to PostgreSQL
+CONN = "postgresql://user:password@localhost:5432/mydb"
+rows = df.to_sql(CONN, "sales", mode="append")
+print(f"Written {rows:,} rows to PostgreSQL")
+```
+
+```javascript JavaScript
+const { read_csv } = require('pardox');
+
+// Load data — parallel Rust CSV parser
+const df = read_csv('./sales_data.csv');
+console.log(`Loaded ${df.shape[0].toLocaleString()} rows × ${df.shape[1]} columns`);
+
+// Cast and compute
+df.cast('quantity', 'Float64');
+const revenueDf = df.mul('price', 'quantity');
+
+// Statistics
+const stdVal = revenueDf.std('result_mul');
+console.log(`Revenue std dev: ${stdVal.toFixed(2)}`);
+
+// Write to PostgreSQL
+const CONN = 'postgresql://user:password@localhost:5432/mydb';
+const rows = df.toSql(CONN, 'sales', 'append');
+console.log(`Written ${rows.toLocaleString()} rows to PostgreSQL`);
+```
+
+```php PHP
+<?php
+require_once 'vendor/autoload.php';
+
+use PardoX\DataFrame;
+
+// Load data — parallel Rust CSV parser
+$df = DataFrame::read_csv('sales_data.csv');
+echo "Loaded " . number_format($df->shape[0]) . " rows × {$df->shape[1]} columns\n";
+
+// Cast and compute
+$df->cast('quantity', 'Float64');
+$revenueDf = $df->mul('price', 'quantity');
+
+// Statistics
+$stdVal = $revenueDf->std('result_mul');
+echo "Revenue std dev: " . number_format($stdVal, 2) . "\n";
+
+// Write to PostgreSQL
+const CONN = 'postgresql://user:password@localhost:5432/mydb';
+$rows = $df->to_sql(CONN, 'sales', 'append');
+echo "Written " . number_format($rows) . " rows to PostgreSQL\n";
+```
+
+</CodeGroup>
+
+## Performance benchmarks
+
+<Note>
+  Loading 2 GB of data:
+  - CSV: ~8 seconds
+  - Parquet: ~3 seconds
+  - **PRDX: ~0.5 seconds** (4.6 GB/s throughput)
+</Note>
+
+## Platform support
+
+| OS | Architecture | Status |
+|----|-------------|--------|
+| Linux | x86_64 | ✅ Stable |
+| Windows | x86_64 | ✅ Stable |
+| macOS | ARM64 (M1/M2/M3) | ✅ Stable |
+| macOS | x86_64 (Intel) | ✅ Stable |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Install PardoX in your preferred language
+  </Card>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Follow a step-by-step tutorial
+  </Card>
+</CardGroup>

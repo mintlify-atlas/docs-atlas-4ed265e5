@@ -1,0 +1,536 @@
+---
+title: 'I/O Functions'
+description: 'PHP I/O functions for reading and writing data in PardoX'
+---
+
+## Overview
+
+PardoX PHP SDK provides multiple I/O functions for reading and writing data across various formats and databases.
+
+## File Formats
+
+### CSV
+
+#### read_csv()
+
+Read CSV file into a DataFrame.
+
+<ParamField path="path" type="string" required>
+  Path to the CSV file
+</ParamField>
+
+<ParamField path="schema" type="array" optional>
+  Optional schema specification mapping column names to types
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// Basic CSV reading
+$df = DataFrame::read_csv("data.csv");
+
+// With schema specification
+$df = DataFrame::read_csv("data.csv", [
+    "id" => "Int64",
+    "name" => "Utf8",
+    "amount" => "Float64"
+]);
+```
+
+#### to_csv()
+
+Export DataFrame to CSV file.
+
+<ParamField path="path" type="string" required>
+  Output file path
+</ParamField>
+
+```php
+<?php
+
+$df->to_csv("output.csv");
+```
+
+### PardoX Binary Format (.prdx)
+
+The `.prdx` format is PardoX's native binary format optimized for high-performance I/O.
+
+**Performance characteristics:**
+- Read throughput: ~4.6 GB/s
+- Columnar storage (HyperBlock architecture)
+- Automatic compression
+- Preserves data types
+
+#### IO::read_prdx()
+
+Read a PardoX binary file.
+
+<ParamField path="path" type="string" required>
+  Path to the .prdx file
+</ParamField>
+
+```php
+<?php
+
+use PardoX\IO;
+use PardoX\DataFrame;
+
+$data = IO::read_prdx("data.prdx");
+$df = new DataFrame($data);
+```
+
+#### to_prdx()
+
+Export DataFrame to PardoX binary format.
+
+<ParamField path="path" type="string" required>
+  Output file path
+</ParamField>
+
+```php
+<?php
+
+$df->to_prdx("data.prdx");
+```
+
+**When to use .prdx format:**
+- Repeated reads of the same dataset
+- Large datasets requiring fast load times
+- Intermediate results in data pipelines
+- Backup/archival of processed data
+
+```php
+<?php
+
+// Example: Process once, read many times
+$df = DataFrame::read_csv("large_file.csv");
+$df = $df->filter($df["amount"]->gt(1000));
+$df->to_prdx("filtered_data.prdx");
+
+// Later: Fast reads
+$data = IO::read_prdx("filtered_data.prdx");
+$df = new DataFrame($data);
+```
+
+### JSON
+
+#### to_json()
+
+Serialize DataFrame to JSON string.
+
+```php
+<?php
+
+$json = $df->to_json();
+file_put_contents("output.json", $json);
+```
+
+## Database Connectors
+
+### PostgreSQL
+
+#### read_sql()
+
+Execute PostgreSQL query and return results as DataFrame.
+
+<ParamField path="connString" type="string" required>
+  PostgreSQL connection string (format: `postgresql://user:password@host:port/database`)
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = DataFrame::read_sql(
+    "postgresql://user:password@localhost:5432/mydb",
+    "SELECT * FROM sales WHERE amount > 1000"
+);
+```
+
+#### to_sql()
+
+Write DataFrame to PostgreSQL table.
+
+<ParamField path="connString" type="string" required>
+  PostgreSQL connection string
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  Table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode: "append" or "upsert"
+</ParamField>
+
+<ParamField path="conflictCols" type="array" default="[]">
+  Columns to use for conflict resolution in upsert mode
+</ParamField>
+
+```php
+<?php
+
+// Append to table
+$rows = $df->to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "sales",
+    "append"
+);
+
+// Upsert with conflict handling
+$rows = $df->to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "sales",
+    "upsert",
+    ["id"]
+);
+
+echo "Inserted/updated $rows rows";
+```
+
+### MySQL
+
+#### read_mysql()
+
+Read from MySQL database.
+
+<ParamField path="connString" type="string" required>
+  MySQL connection string (format: `mysql://user:password@host:port/database`)
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = DataFrame::read_mysql(
+    "mysql://user:password@host:3306/db",
+    "SELECT * FROM users WHERE status = 'active'"
+);
+```
+
+#### to_mysql()
+
+Write DataFrame to MySQL table.
+
+<ParamField path="connString" type="string" required>
+  MySQL connection string
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  Table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode: "append", "replace", or "upsert"
+</ParamField>
+
+```php
+<?php
+
+$df->to_mysql(
+    "mysql://user:password@host:3306/db",
+    "table_name",
+    "append"
+);
+```
+
+### SQL Server
+
+#### read_sqlserver()
+
+Read from SQL Server database.
+
+<ParamField path="connString" type="string" required>
+  SQL Server connection string
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = DataFrame::read_sqlserver(
+    "Server=host;Database=db;User Id=user;Password=pass;",
+    "SELECT * FROM orders WHERE order_date > '2024-01-01'"
+);
+```
+
+#### to_sqlserver()
+
+Write DataFrame to SQL Server table.
+
+<ParamField path="connString" type="string" required>
+  SQL Server connection string
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  Table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode
+</ParamField>
+
+```php
+<?php
+
+$df->to_sqlserver(
+    "Server=host;Database=db;User Id=user;Password=pass;",
+    "sales_data",
+    "append"
+);
+```
+
+### MongoDB
+
+#### read_mongodb()
+
+Read from MongoDB collection.
+
+<ParamField path="connString" type="string" required>
+  MongoDB connection string
+</ParamField>
+
+<ParamField path="collection" type="string" required>
+  Database and collection name (format: "database.collection")
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = DataFrame::read_mongodb(
+    "mongodb://user:password@host:27017",
+    "mydb.users"
+);
+```
+
+#### to_mongodb()
+
+Write DataFrame to MongoDB collection.
+
+<ParamField path="connString" type="string" required>
+  MongoDB connection string
+</ParamField>
+
+<ParamField path="collection" type="string" required>
+  Database and collection name (format: "database.collection")
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode: "append" or "replace"
+</ParamField>
+
+```php
+<?php
+
+$df->to_mongodb(
+    "mongodb://user:password@host:27017",
+    "mydb.analytics",
+    "append"
+);
+```
+
+## Data Conversion
+
+### to_dict()
+
+Convert DataFrame to array of associative arrays.
+
+```php
+<?php
+
+$arr = $df->to_dict();
+// [["name"=>"Alice", "age"=>30], ["name"=>"Bob", "age"=>25]]
+```
+
+### tolist()
+
+Convert DataFrame to array of arrays (without column names).
+
+```php
+<?php
+
+$arr = $df->tolist();
+// [["Alice", 30], ["Bob", 25]]
+```
+
+## Error Handling
+
+All I/O operations may throw exceptions on failure:
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+try {
+    $df = DataFrame::read_csv("nonexistent.csv");
+} catch (\RuntimeException $e) {
+    echo "Error reading file: " . $e->getMessage();
+}
+
+try {
+    $df = DataFrame::read_sql(
+        "postgresql://user:pass@localhost/db",
+        "SELECT * FROM table"
+    );
+} catch (\RuntimeException $e) {
+    echo "Database error: " . $e->getMessage();
+}
+```
+
+## Complete Examples
+
+### ETL Pipeline
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+try {
+    // Extract: Read from CSV
+    $df = DataFrame::read_csv("raw_data.csv", [
+        "id" => "Int64",
+        "amount" => "Float64",
+        "date" => "Utf8"
+    ]);
+    
+    // Transform: Clean and filter
+    $df->fillna(0.0);
+    $df->round(2);
+    $df = $df->filter($df["amount"]->gt(0));
+    
+    // Load: Write to database
+    $rows = $df->to_sql(
+        "postgresql://user:pass@localhost/warehouse",
+        "processed_data",
+        "append"
+    );
+    
+    echo "Successfully processed $rows rows";
+    
+} catch (\RuntimeException $e) {
+    echo "ETL failed: " . $e->getMessage();
+}
+```
+
+### Multi-Database Aggregation
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// Read from PostgreSQL
+$pg_df = DataFrame::read_sql(
+    "postgresql://user:pass@localhost/sales_db",
+    "SELECT customer_id, amount FROM orders"
+);
+
+// Read from MySQL
+$mysql_df = DataFrame::read_mysql(
+    "mysql://user:pass@localhost/crm_db",
+    "SELECT id, name FROM customers"
+);
+
+// Join the data
+$result = $pg_df->join($mysql_df, [
+    "leftOn" => "customer_id",
+    "rightOn" => "id"
+]);
+
+// Export to MongoDB for analytics
+$result->to_mongodb(
+    "mongodb://localhost:27017",
+    "analytics.customer_orders",
+    "replace"
+);
+```
+
+### Fast Data Caching
+
+```php
+<?php
+
+use PardoX\DataFrame;
+use PardoX\IO;
+
+$cache_file = "cache.prdx";
+
+if (file_exists($cache_file)) {
+    // Fast load from cache
+    $data = IO::read_prdx($cache_file);
+    $df = new DataFrame($data);
+    echo "Loaded from cache";
+} else {
+    // Slow load from database
+    $df = DataFrame::read_sql(
+        "postgresql://user:pass@localhost/db",
+        "SELECT * FROM large_table"
+    );
+    
+    // Cache for next time
+    $df->to_prdx($cache_file);
+    echo "Cached for future use";
+}
+
+echo $df->show();
+```
+
+## Performance Tips
+
+1. **Use .prdx format** for repeated reads - 10-100x faster than CSV
+2. **Specify schema** when reading CSV to avoid type inference overhead
+3. **Batch SQL writes** - use "append" mode with large DataFrames rather than row-by-row inserts
+4. **Use connection pooling** in production applications
+5. **Enable FFI caching** for better performance:
+
+```php
+<?php
+
+// In your bootstrap/initialization
+if (function_exists('opcache_get_status')) {
+    opcache_compile_file(__DIR__ . '/vendor/autoload.php');
+}
+```
+
+## Connection String Formats
+
+### PostgreSQL
+```
+postgresql://username:password@hostname:port/database
+```
+
+### MySQL
+```
+mysql://username:password@hostname:port/database
+```
+
+### SQL Server
+```
+Server=hostname;Database=database;User Id=username;Password=password;
+```
+
+### MongoDB
+```
+mongodb://username:password@hostname:port
+```

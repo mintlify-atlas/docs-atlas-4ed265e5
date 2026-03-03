@@ -1,0 +1,405 @@
+---
+title: 'Series'
+description: 'Vectorized column operations with hybrid CPU/GPU acceleration'
+---
+
+## Constructor
+
+### Series()
+
+Represents an individual column of a PardoX DataFrame. Enables vectorized operations using the Rust engine.
+
+<ParamField path="df" type="DataFrame" required>
+  Parent DataFrame
+</ParamField>
+
+<ParamField path="col_name" type="str" required>
+  Column name
+</ParamField>
+
+```python
+# Created via DataFrame column selection
+series = df["age"]
+```
+
+---
+
+## Properties
+
+### name
+
+The column name of the Series.
+
+<ResponseField name="return" type="str">
+  Column name
+</ResponseField>
+
+```python
+column_name = series.name
+```
+
+### dtype
+
+Returns the data type of the Series.
+
+<ResponseField name="return" type="str">
+  Data type (e.g., "Int64", "Float64", "Utf8", "Boolean")
+</ResponseField>
+
+```python
+data_type = series.dtype
+# "Float64"
+```
+
+---
+
+## Display Methods
+
+### head()
+
+Returns a new Series with the first n rows.
+
+<ParamField path="n" type="int" default="5">
+  Number of rows to return
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  A new Series containing the first n rows
+</ResponseField>
+
+```python
+series.head(10)
+```
+
+### tail()
+
+Returns a new Series with the last n rows.
+
+<ParamField path="n" type="int" default="5">
+  Number of rows to return
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  A new Series containing the last n rows
+</ResponseField>
+
+```python
+series.tail(10)
+```
+
+### show()
+
+Prints the Series to the console.
+
+<ParamField path="n" type="int" default="10">
+  Number of rows to display
+</ParamField>
+
+```python
+series.show(20)
+```
+
+---
+
+## Arithmetic Operations
+
+All arithmetic operations support cross-manager operations and return a new Series.
+
+### \__add__()
+
+Addition operator. Supports Series-to-Series addition.
+
+<ParamField path="other" type="Series" required>
+  Series to add
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  New Series with result
+</ResponseField>
+
+```python
+result = df["price"] + df["tax"]
+
+# Chaining operations
+total = df["a"] + df["b"] + df["c"]
+```
+
+### \__sub__()
+
+Subtraction operator.
+
+<ParamField path="other" type="Series" required>
+  Series to subtract
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  New Series with result
+</ResponseField>
+
+```python
+profit = df["revenue"] - df["cost"]
+```
+
+### \__mul__()
+
+Multiplication operator.
+
+<ParamField path="other" type="Series" required>
+  Series to multiply
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  New Series with result
+</ResponseField>
+
+```python
+total = df["quantity"] * df["unit_price"]
+```
+
+### \__truediv__()
+
+Division operator.
+
+<ParamField path="other" type="Series" required>
+  Series to divide by
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  New Series with result
+</ResponseField>
+
+```python
+avg_price = df["total_sales"] / df["num_items"]
+```
+
+### \__mod__()
+
+Modulo operator.
+
+<ParamField path="other" type="Series" required>
+  Series for modulo operation
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  New Series with result
+</ResponseField>
+
+```python
+remainder = df["total"] % df["divisor"]
+```
+
+---
+
+## Comparison Operations
+
+All comparison operations return a boolean Series that can be used for filtering.
+
+### \__eq__()
+
+Equality comparison. Supports Series-to-Series and Series-to-scalar.
+
+<ParamField path="other" type="Series | int | float" required>
+  Value to compare
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  Boolean Series
+</ResponseField>
+
+```python
+# Scalar comparison
+mask = df["status"] == 1
+
+# Series comparison
+mask = df["col_a"] == df["col_b"]
+```
+
+### \__ne__()
+
+Not equal comparison.
+
+<ParamField path="other" type="Series | int | float" required>
+  Value to compare
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  Boolean Series
+</ResponseField>
+
+```python
+mask = df["status"] != 0
+```
+
+### \__gt__()
+
+Greater than comparison.
+
+<ParamField path="other" type="Series | int | float" required>
+  Value to compare
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  Boolean Series
+</ResponseField>
+
+```python
+mask = df["age"] > 18
+```
+
+### \__ge__()
+
+Greater than or equal comparison.
+
+<ParamField path="other" type="Series | int | float" required>
+  Value to compare
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  Boolean Series
+</ResponseField>
+
+```python
+mask = df["score"] >= 70
+```
+
+### \__lt__()
+
+Less than comparison.
+
+<ParamField path="other" type="Series | int | float" required>
+  Value to compare
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  Boolean Series
+</ResponseField>
+
+```python
+mask = df["price"] < 100
+```
+
+### \__le__()
+
+Less than or equal comparison.
+
+<ParamField path="other" type="Series | int | float" required>
+  Value to compare
+</ParamField>
+
+<ResponseField name="return" type="Series">
+  Boolean Series
+</ResponseField>
+
+```python
+mask = df["temperature"] <= 32
+```
+
+---
+
+## Aggregation Methods
+
+All aggregations are computed natively in Rust for maximum performance.
+
+### sum()
+
+Computes the sum of all values.
+
+<ResponseField name="return" type="float">
+  Sum of values
+</ResponseField>
+
+```python
+total = df["revenue"].sum()
+```
+
+### mean()
+
+Computes the arithmetic mean.
+
+<ResponseField name="return" type="float">
+  Mean value
+</ResponseField>
+
+```python
+average = df["age"].mean()
+```
+
+### min()
+
+Finds the minimum value.
+
+<ResponseField name="return" type="float">
+  Minimum value
+</ResponseField>
+
+```python
+min_price = df["price"].min()
+```
+
+### max()
+
+Finds the maximum value.
+
+<ResponseField name="return" type="float">
+  Maximum value
+</ResponseField>
+
+```python
+max_temperature = df["temp"].max()
+```
+
+### count()
+
+Counts the number of non-null values.
+
+<ResponseField name="return" type="int">
+  Count of values
+</ResponseField>
+
+```python
+num_records = df["user_id"].count()
+```
+
+### std()
+
+Computes the standard deviation (Bessel-corrected sample std dev).
+
+<ResponseField name="return" type="float">
+  Standard deviation
+</ResponseField>
+
+```python
+std_dev = df["scores"].std()
+```
+
+---
+
+## ML Integration
+
+### \__array__()
+
+NumPy protocol for zero-copy array conversion. Exposes the underlying Rust f64 buffer as a ctypes array.
+
+<ParamField path="dtype" type="type" default="None">
+  Optional dtype parameter (for NumPy compatibility)
+</ParamField>
+
+<ResponseField name="return" type="ctypes.Array">
+  ctypes array wrapping the Rust memory buffer
+</ResponseField>
+
+```python
+import numpy as np
+
+# Zero-copy conversion to NumPy
+np_array = np.array(df["values"])
+
+# Use with scikit-learn
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+scaled = scaler.fit_transform(np.array(df["features"]).reshape(-1, 1))
+```
+
+<Note>
+  This method provides true zero-copy access to the underlying Rust buffer. The NumPy array wraps the same memory without duplication. Column must be a numeric type (Float64/Int64).
+</Note>

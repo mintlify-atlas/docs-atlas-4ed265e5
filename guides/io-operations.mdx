@@ -1,0 +1,212 @@
+---
+title: 'I/O Operations'
+description: 'Read and write data across CSV, Parquet, native PRDX format, and Apache Arrow with high-performance Rust-powered I/O'
+---
+
+The bottleneck in most data pipelines is not computation, but **I/O**. PardoX moves all data ingestion and persistence entirely into the Rust core, bypassing Python's file handling and object creation overhead.
+
+## CSV Files
+
+PardoX features a **multi-threaded CSV reader**. The file is memory-mapped and parallel workers parse chunks simultaneously. No Python objects are created during ingestion.
+
+### Basic Usage
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    import pardox as px
+
+    # Automatic type inference (Int64, Float64, Utf8)
+    df = px.read_csv("dataset.csv")
+    print(df.shape)    # (rows, cols)
+    print(df.columns)  # ['col1', 'col2', ...]
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const { DataFrame } = require('@pardox/pardox');
+
+    // Automatic type inference
+    const df = DataFrame.read_csv('./dataset.csv');
+    console.log(df.shape);    // [rows, cols]
+    console.log(df.columns);  // ['col1', 'col2', ...]
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    use PardoX\DataFrame;
+
+    // Automatic type inference
+    $df = DataFrame::read_csv("dataset.csv");
+    print_r($df->shape);    // [rows, cols]
+    print_r($df->columns);  // ['col1', 'col2', ...]
+    ```
+  </Tab>
+</Tabs>
+
+### Manual Schema
+
+Override automatic type inference by providing an explicit schema:
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    df = px.read_csv("dataset.csv", schema={
+        "price":    "Float64",
+        "quantity": "Float64",
+        "id":       "Int64",
+        "name":     "Utf8",
+    })
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const df = DataFrame.read_csv('./dataset.csv', {
+        id: 'Int64',
+        name: 'Utf8',
+        price: 'Float64',
+        quantity: 'Float64'
+    });
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $df = DataFrame::read_csv("dataset.csv", [
+        "id" => "Int64",
+        "name" => "Utf8",
+        "price" => "Float64",
+        "quantity" => "Float64"
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  **Intelligent type inference** - Without a schema, the engine scans the first rows to detect `Int64`, `Float64`, or `Utf8`. Pass a schema to override for specific columns.
+</Info>
+
+<Check>
+  **Parallel parsing** - The file is split into logical blocks processed by multiple CPU cores concurrently.
+</Check>
+
+## Native Format (.prdx)
+
+The **PRDX format** is a custom binary layout designed for instant persistence. Reading is a near-direct memory copy — no parsing, no schema detection.
+
+### Save and Load
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Save
+    df.to_prdx("output.prdx")
+
+    # Load
+    df = px.read_prdx("output.prdx")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Save
+    df.toPrdx('./output.prdx');
+
+    // Load
+    const df = DataFrame.read_prdx('./output.prdx');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Save
+    $df->to_prdx("output.prdx");
+
+    // Load
+    $data = IO::read_prdx("output.prdx");
+    $df = new DataFrame($data);
+    ```
+  </Tab>
+</Tabs>
+
+<Check>
+  **Benchmark** - In tests with 10 GB datasets, reading a `.prdx` file achieves **~4.6 GB/s** throughput, limited only by NVMe SSD speed.
+</Check>
+
+### Performance Comparison
+
+| Format | Read speed (2 GB file) |
+|--------|----------------------|
+| CSV | ~8s |
+| Parquet | ~3s |
+| **PRDX** | **~0.5s** |
+
+## Apache Arrow Bridge
+
+PardoX integrates with the Arrow ecosystem via the **Arrow C Data Interface**. Conversion passes memory pointers — no data is copied.
+
+```python
+import pyarrow as pa
+import pardox as px
+
+arrow_table = pa.Table.from_pydict({"price": [1.5, 2.0], "qty": [10, 20]})
+df = px.from_arrow(arrow_table)
+```
+
+<Tip>
+  **Interoperability** - The Arrow bridge connects PardoX to Polars, DuckDB, Apache Spark, and any other tool that supports the Arrow IPC format.
+</Tip>
+
+## Writing Data
+
+### CSV Export
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    df.to_csv("output.csv")
+
+    # With custom delimiter
+    df.to_csv("output.csv", delimiter=";")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    df.toCsv('./output.csv');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $df->to_csv("output.csv");
+    ```
+  </Tab>
+</Tabs>
+
+### Native Binary Format
+
+For maximum performance in repeated reads, use the `.prdx` format:
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    df.to_prdx("data.prdx")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    df.toPrdx('./data.prdx');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $df->to_prdx("data.prdx");
+    ```
+  </Tab>
+</Tabs>
+
+## Supported Types
+
+PardoX supports three core data types:
+
+- **Int64** - 64-bit signed integers
+- **Float64** - Double-precision floating point
+- **Utf8** - UTF-8 encoded strings
+
+All type inference and conversion happens in Rust with zero Python object overhead.

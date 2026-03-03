@@ -1,0 +1,705 @@
+---
+title: 'DataFrame'
+description: 'PHP DataFrame class for high-performance data manipulation'
+---
+
+## Overview
+
+The `DataFrame` class is the primary data structure in PardoX PHP SDK, representing a two-dimensional labeled data structure with columns of potentially different types.
+
+## Constructor
+
+### new DataFrame()
+
+Create a new DataFrame from an array of associative arrays.
+
+<ParamField path="data" type="array" optional>
+  Array of associative arrays where each element represents a row
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// From array of associative arrays
+$df = new DataFrame([
+    ["name" => "Alice", "age" => 30, "score" => 85.5],
+    ["name" => "Bob", "age" => 25, "score" => 92.0],
+    ["name" => "Charlie", "age" => 35, "score" => 78.5]
+]);
+
+// Empty DataFrame
+$df = new DataFrame();
+```
+
+## Static Methods
+
+### read_csv()
+
+Read a CSV file into a DataFrame.
+
+<ParamField path="path" type="string" required>
+  Path to the CSV file
+</ParamField>
+
+<ParamField path="schema" type="array" optional>
+  Schema specification mapping column names to data types ("Int64", "Float64", "Utf8")
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// Basic CSV reading
+$df = DataFrame::read_csv("data.csv");
+
+// With schema specification
+$df = DataFrame::read_csv("data.csv", [
+    "id" => "Int64",
+    "name" => "Utf8",
+    "amount" => "Float64"
+]);
+```
+
+### read_sql()
+
+Execute a SQL query and return results as DataFrame.
+
+<ParamField path="connString" type="string" required>
+  Database connection string (PostgreSQL format)
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+// PostgreSQL
+$df = DataFrame::read_sql(
+    "postgresql://user:password@localhost:5432/mydb",
+    "SELECT * FROM sales WHERE amount > 1000"
+);
+```
+
+### read_mysql()
+
+Read from MySQL database.
+
+<ParamField path="connString" type="string" required>
+  MySQL connection string
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+```php
+<?php
+
+$df = DataFrame::read_mysql(
+    "mysql://user:password@host:3306/db",
+    "SELECT * FROM table"
+);
+```
+
+### read_sqlserver()
+
+Read from SQL Server database.
+
+<ParamField path="connString" type="string" required>
+  SQL Server connection string
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+```php
+<?php
+
+$df = DataFrame::read_sqlserver(
+    "Server=host;Database=db;User Id=user;Password=pass;",
+    "SELECT * FROM table"
+);
+```
+
+### read_mongodb()
+
+Read from MongoDB collection.
+
+<ParamField path="connString" type="string" required>
+  MongoDB connection string
+</ParamField>
+
+<ParamField path="collection" type="string" required>
+  Database and collection name (format: "database.collection")
+</ParamField>
+
+```php
+<?php
+
+$df = DataFrame::read_mongodb(
+    "mongodb://user:password@host:27017",
+    "database.collection"
+);
+```
+
+## Properties
+
+### shape
+
+Return the dimensions of the DataFrame as `[rows, columns]`.
+
+```php
+<?php
+
+$shape = $df->shape;
+echo "Rows: {$shape[0]}, Cols: {$shape[1]}";
+```
+
+### columns
+
+Return the list of column names.
+
+```php
+<?php
+
+$columns = $df->columns;
+print_r($columns); // ["name", "age", "score"]
+```
+
+### dtypes
+
+Return the data types of each column.
+
+```php
+<?php
+
+$types = $df->dtypes;
+print_r($types);
+// ["name" => "Utf8", "age" => "Int64", "score" => "Float64"]
+```
+
+## Selection & Indexing
+
+### head()
+
+Return the first n rows.
+
+<ParamField path="n" type="int" default="5">
+  Number of rows to return
+</ParamField>
+
+```php
+<?php
+
+// First 10 rows
+$head = $df->head(10);
+echo $head->show();
+```
+
+### tail()
+
+Return the last n rows.
+
+<ParamField path="n" type="int" default="5">
+  Number of rows to return
+</ParamField>
+
+```php
+<?php
+
+$tail = $df->tail(5);
+```
+
+### iloc()
+
+Slice rows by position.
+
+<ParamField path="start" type="int" required>
+  Starting row index (inclusive)
+</ParamField>
+
+<ParamField path="end" type="int" required>
+  Ending row index (exclusive)
+</ParamField>
+
+```php
+<?php
+
+// Rows 10-20
+$subset = $df->iloc(10, 20);
+```
+
+### Column Access
+
+Access columns using ArrayAccess interface.
+
+```php
+<?php
+
+// Select single column (returns Series)
+$ages = $df["age"];
+
+// Using ArrayAccess method
+$names = $df->offsetGet("name");
+
+// Add new column
+$df["new_col"] = $df["age"] * 2;
+```
+
+## Filtering
+
+### filter()
+
+Filter DataFrame using a boolean Series mask.
+
+<ParamField path="mask" type="Series" required>
+  Boolean Series for filtering rows
+</ParamField>
+
+```php
+<?php
+
+// Create mask using Series comparison
+$mask = $df["age"]->gt(25);
+$filtered = $df->filter($mask);
+
+// Complex filter
+$mask = $df["age"]->gte(25)->and($df["score"]->gt(80));
+$filtered = $df->filter($mask);
+```
+
+## Sorting
+
+### sortValues()
+
+Sort DataFrame by column values.
+
+<ParamField path="by" type="string" required>
+  Column name to sort by
+</ParamField>
+
+<ParamField path="ascending" type="bool" default="true">
+  Sort in ascending order
+</ParamField>
+
+<ParamField path="gpu" type="bool" default="false">
+  Use GPU acceleration for large datasets
+</ParamField>
+
+```php
+<?php
+
+// Sort by name ascending
+$sorted = $df->sortValues("name");
+
+// Sort by amount descending
+$sorted = $df->sortValues("amount", false);
+
+// Use GPU for large datasets
+$sorted = $df->sortValues("amount", false, true);
+```
+
+## Joins
+
+### join()
+
+Join with another DataFrame.
+
+<ParamField path="other" type="DataFrame" required>
+  The DataFrame to join with
+</ParamField>
+
+<ParamField path="options" type="array" required>
+  Join options including "on", "leftOn", "rightOn" keys
+</ParamField>
+
+```php
+<?php
+
+// Inner join on client_id
+$result = $df->join($clients_df, [
+    "on" => "client_id"
+]);
+
+// With different column names
+$result = $df->join($clients_df, [
+    "leftOn" => "customer_id",
+    "rightOn" => "id"
+]);
+```
+
+## Arithmetic Operations
+
+### add()
+
+Add two columns element-wise.
+
+<ParamField path="colA" type="string" required>
+  First column name
+</ParamField>
+
+<ParamField path="colB" type="string" required>
+  Second column name
+</ParamField>
+
+```php
+<?php
+
+// Create new column with sum
+$df = $df->add("amount", "tax");
+// Result stored in "result_math_add" column
+```
+
+### sub()
+
+Subtract two columns element-wise.
+
+<ParamField path="colA" type="string" required>
+  First column name
+</ParamField>
+
+<ParamField path="colB" type="string" required>
+  Second column name
+</ParamField>
+
+```php
+<?php
+
+$df = $df->sub("price", "discount");
+```
+
+### std()
+
+Calculate standard deviation of a column.
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+```php
+<?php
+
+$stdValue = $df->std("score");
+```
+
+### minMaxScale()
+
+Normalize column to [0, 1] range using min-max scaling.
+
+<ParamField path="col" type="string" required>
+  Column name to normalize
+</ParamField>
+
+```php
+<?php
+
+$df = $df->minMaxScale("amount");
+```
+
+## Data Cleaning
+
+### fillna()
+
+Fill null values with a specified value.
+
+<ParamField path="value" type="float" required>
+  Value to replace nulls with
+</ParamField>
+
+```php
+<?php
+
+// Fill numeric columns with 0
+$df->fillna(0.0);
+```
+
+### round()
+
+Round numeric columns to specified decimal places.
+
+<ParamField path="decimals" type="int" required>
+  Number of decimal places
+</ParamField>
+
+```php
+<?php
+
+// Round to 2 decimal places
+$df->round(2);
+```
+
+## Type Casting
+
+### cast()
+
+Convert a column to a different data type.
+
+<ParamField path="column" type="string" required>
+  Column name to cast
+</ParamField>
+
+<ParamField path="targetType" type="string" required>
+  Target data type ("Int64", "Float64", "Utf8")
+</ParamField>
+
+```php
+<?php
+
+// Convert string to integer
+$df->cast("age", "Int64");
+
+// Convert to float
+$df->cast("price", "Float64");
+```
+
+## Display & Inspection
+
+### show()
+
+Display an ASCII table representation of the DataFrame.
+
+<ParamField path="n" type="int" default="10">
+  Number of rows to display
+</ParamField>
+
+```php
+<?php
+
+echo $df->show(10);
+```
+
+### value_counts()
+
+Get frequency count of unique values in a column.
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+```php
+<?php
+
+$counts = $df->value_counts("category");
+// ["Electronics" => 150, "Clothing" => 100, ...]
+```
+
+### unique()
+
+Get unique values from a column.
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+```php
+<?php
+
+$unique = $df->unique("name");
+// ["Alice", "Bob", "Charlie", ...]
+```
+
+## Export Methods
+
+### to_csv()
+
+Export DataFrame to CSV file.
+
+<ParamField path="path" type="string" required>
+  Output file path
+</ParamField>
+
+```php
+<?php
+
+$df->to_csv("output.csv");
+```
+
+### to_prdx()
+
+Export to PardoX binary format (.prdx) for high-performance storage.
+
+<ParamField path="path" type="string" required>
+  Output file path
+</ParamField>
+
+```php
+<?php
+
+$df->to_prdx("data.prdx");
+```
+
+### to_sql()
+
+Write DataFrame to SQL table.
+
+<ParamField path="connString" type="string" required>
+  Database connection string
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  Table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode: "append" or "upsert"
+</ParamField>
+
+<ParamField path="conflictCols" type="array" default="[]">
+  Columns to use for upsert conflict detection
+</ParamField>
+
+```php
+<?php
+
+// Append to table
+$rows = $df->to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "sales",
+    "append"
+);
+
+// Upsert with conflict handling
+$rows = $df->to_sql(
+    "postgresql://user:pass@localhost/mydb",
+    "sales",
+    "upsert",
+    ["id"]
+);
+```
+
+### to_mysql()
+
+Write DataFrame to MySQL table.
+
+<ParamField path="connString" type="string" required>
+  MySQL connection string
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  Table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode: "append", "replace", or "upsert"
+</ParamField>
+
+```php
+<?php
+
+$df->to_mysql(
+    "mysql://user:password@host:3306/db",
+    "table_name",
+    "append"
+);
+```
+
+### to_sqlserver()
+
+Write DataFrame to SQL Server table.
+
+<ParamField path="connString" type="string" required>
+  SQL Server connection string
+</ParamField>
+
+<ParamField path="table" type="string" required>
+  Table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode
+</ParamField>
+
+```php
+<?php
+
+$df->to_sqlserver(
+    "Server=host;Database=db;User Id=user;Password=pass;",
+    "table_name",
+    "append"
+);
+```
+
+### to_mongodb()
+
+Write DataFrame to MongoDB collection.
+
+<ParamField path="connString" type="string" required>
+  MongoDB connection string
+</ParamField>
+
+<ParamField path="collection" type="string" required>
+  Database and collection name (format: "database.collection")
+</ParamField>
+
+<ParamField path="mode" type="string" default="append">
+  Write mode: "append" or "replace"
+</ParamField>
+
+```php
+<?php
+
+$df->to_mongodb(
+    "mongodb://user:password@host:27017",
+    "database.collection",
+    "append"
+);
+```
+
+### to_json()
+
+Serialize DataFrame to JSON string.
+
+```php
+<?php
+
+$json = $df->to_json();
+```
+
+### to_dict()
+
+Convert DataFrame to array of associative arrays.
+
+```php
+<?php
+
+$arr = $df->to_dict();
+// [["name"=>"Alice", "age"=>30], ...]
+```
+
+### tolist()
+
+Convert DataFrame to array of arrays (without column names).
+
+```php
+<?php
+
+$arr = $df->tolist();
+// [["Alice", 30], ["Bob", 25], ...]
+```
+
+## Error Handling
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+try {
+    $df = DataFrame::read_csv("nonexistent.csv");
+} catch (\RuntimeException $e) {
+    echo "Error: " . $e->getMessage();
+}
+
+// Check if DataFrame is empty
+if ($df->shape[0] === 0) {
+    echo "DataFrame is empty";
+}
+```

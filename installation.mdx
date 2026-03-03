@@ -1,0 +1,279 @@
+---
+title: Installation
+description: Setup guide for Python, Node.js, and PHP SDKs
+---
+
+# Installation
+
+PardoX ships as a pre-compiled native library. No Rust compiler or C toolchain is required on the end-user machine. The Rust core (`libpardox.so` / `.dylib` / `.dll`) is bundled inside the package for each supported platform.
+
+<Tabs>
+  <Tab title="Python">
+    ## Python SDK
+
+    Install PardoX using pip:
+
+    ```bash
+    pip install pardox
+    ```
+
+    ### System requirements
+
+    | OS | Architecture | Status |
+    |----|-------------|--------|
+    | Linux | x86_64 | ✅ Stable |
+    | Windows | x86_64 | ✅ Stable |
+    | macOS | ARM64 (M1/M2/M3) | ✅ Stable |
+    | macOS | x86_64 (Intel) | ✅ Stable |
+
+    <Note>
+      **Python version:** Python 3.10 or higher is required. No Rust compiler is needed — binaries are pre-packaged for all platforms.
+    </Note>
+
+    <Info>
+      **No database drivers needed:** PardoX connects to PostgreSQL, MySQL, SQL Server, and MongoDB entirely through the Rust core. You do **not** need to install `psycopg2`, `pymysql`, `pyodbc`, or `pymongo`.
+    </Info>
+
+    ### Verify installation
+
+    Create a test script to verify your installation:
+
+    ```python
+    import pardox as px
+
+    # Check version
+    print(px.__version__)  # e.g. "0.3.1"
+
+    # Test basic functionality
+    df = px.DataFrame([
+        {"name": "Alice", "age": 30, "score": 85.5},
+        {"name": "Bob", "age": 25, "score": 92.0}
+    ])
+    print(df.shape)  # (2, 3)
+    df.show()
+    ```
+
+    <Tip>
+      If you're working with CSV files, test the parallel CSV parser:
+      ```python
+      df = px.read_csv("my_data.csv")
+      print(df.shape)
+      ```
+    </Tip>
+
+  </Tab>
+
+  <Tab title="Node.js">
+    ## Node.js SDK
+
+    The Node.js SDK uses [koffi](https://koffi.dev/) for FFI bindings and ships the same pre-compiled `.so` / `.dylib` / `.dll`.
+
+    Install using npm or yarn:
+
+    ```bash
+    npm install pardox
+    # or
+    yarn add pardox
+    ```
+
+    ### Requirements
+
+    | Runtime | Minimum version |
+    |---------|----------------|
+    | Node.js | 18 LTS or higher |
+
+    ### Verify installation
+
+    Create a test script `test.js`:
+
+    ```javascript
+    const { read_csv, DataFrame } = require('pardox');
+
+    // Test DataFrame creation
+    const df = DataFrame.fromArray([
+        { name: "Alice", age: 30, score: 85.5 },
+        { name: "Bob", age: 25, score: 92.0 }
+    ]);
+
+    console.log('Shape:', df.shape);  // [2, 3]
+    df.show();
+    ```
+
+    Run the test:
+
+    ```bash
+    node test.js
+    ```
+
+    <Tip>
+      The SDK automatically detects your platform and loads the correct binary:
+      - Linux x64 (`libpardox.so`)
+      - macOS Intel/Apple Silicon (`libpardox.dylib`)
+      - Windows x64 (`pardox.dll`)
+    </Tip>
+
+  </Tab>
+
+  <Tab title="PHP">
+    ## PHP SDK
+
+    The PHP SDK uses the built-in `FFI` extension (PHP 7.4+).
+
+    Install using Composer:
+
+    ```bash
+    composer require pardox/pardox-php
+    ```
+
+    ### Requirements
+
+    | Runtime | Minimum version |
+    |---------|----------------|
+    | PHP | 7.4 or higher |
+    | FFI extension | Must be enabled in `php.ini` |
+
+    ### Enable FFI extension
+
+    Edit your `php.ini` file:
+
+    ```ini
+    ; php.ini
+    extension=ffi
+    ffi.enable=true
+    ```
+
+    <Warning>
+      The FFI extension is **required** for PardoX to work. Without it, you'll receive a fatal error when trying to load the library.
+    </Warning>
+
+    ### Verify installation
+
+    Create a test script `test.php`:
+
+    ```php
+    <?php
+    require_once 'vendor/autoload.php';
+
+    use PardoX\DataFrame;
+
+    // Test DataFrame creation
+    $df = new DataFrame([
+        ["name" => "Alice", "age" => 30, "score" => 85.5],
+        ["name" => "Bob", "age" => 25, "score" => 92.0]
+    ]);
+
+    echo "Shape: " . implode(' × ', $df->shape) . "\n";
+    echo $df->show();
+    ```
+
+    Run the test:
+
+    ```bash
+    php test.php
+    ```
+
+    <Tip>
+      For production deployments, enable OPcache to improve FFI performance:
+      ```php
+      // In your bootstrap
+      if (function_exists('opcache_get_status')) {
+          opcache_compile_file(__DIR__ . '/vendor/autoload.php');
+      }
+      ```
+    </Tip>
+
+  </Tab>
+</Tabs>
+
+## Docker (databases for testing)
+
+PardoX includes a `docker-compose.yml` file to spin up all supported databases locally for testing:
+
+```bash
+docker-compose up -d
+```
+
+This starts:
+
+| Container | Database | Host port |
+|-----------|----------|----------|
+| `pardox_validation_db` | PostgreSQL 16 | 5434 |
+| `pardox_mysql` | MySQL 8.0 | 3306 |
+| `pardox_sqlserver` | SQL Server 2022 | 1433 |
+
+<Tip>
+  Add a MongoDB service to the compose file with `mongo:7.0` if needed for your environment.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Python: ModuleNotFoundError">
+    If you see `ModuleNotFoundError: No module named 'pardox'`, ensure you're using the correct Python environment:
+
+    ```bash
+    # Check your Python version
+    python --version  # Should be 3.10 or higher
+
+    # Reinstall in the correct environment
+    pip install --upgrade pardox
+    ```
+  </Accordion>
+
+  <Accordion title="Node.js: Cannot find module 'koffi'">
+    The `koffi` FFI library is a dependency. Reinstall to fix:
+
+    ```bash
+    rm -rf node_modules
+    npm install
+    ```
+  </Accordion>
+
+  <Accordion title="PHP: FFI extension not enabled">
+    If you see `FFI extension is not enabled`, edit your `php.ini`:
+
+    ```ini
+    extension=ffi
+    ffi.enable=true
+    ```
+
+    Then restart your PHP server or PHP-FPM:
+
+    ```bash
+    # For PHP-FPM
+    sudo systemctl restart php-fpm
+
+    # For built-in server
+    # Just restart your terminal
+    ```
+  </Accordion>
+
+  <Accordion title="Platform not supported error">
+    PardoX currently supports:
+    - Linux x86_64
+    - Windows x86_64
+    - macOS Intel (x86_64)
+    - macOS Apple Silicon (ARM64)
+
+    If you're on a different platform, please [open an issue on GitHub](https://github.com/betoalien/PardoX/issues).
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Build your first ETL pipeline
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api/python/dataframe"
+  >
+    Explore all available methods
+  </Card>
+</CardGroup>

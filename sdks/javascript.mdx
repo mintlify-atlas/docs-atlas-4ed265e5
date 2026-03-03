@@ -1,0 +1,546 @@
+---
+title: JavaScript SDK
+description: Universal high-performance DataFrame engine for Node.js powered by Rust
+---
+
+## Installation
+
+Install PardoX via npm:
+
+```bash
+npm install @pardox/pardox
+```
+
+**Requirements:**
+- Node.js 18.0.0 or higher
+- Koffi FFI library (installed automatically as dependency)
+
+## Quick Start
+
+```javascript
+const { DataFrame } = require('@pardox/pardox');
+
+// Create DataFrame from array of objects
+const df = DataFrame.fromArray([
+    { name: "Alice", age: 30, score: 85.5 },
+    { name: "Bob", age: 25, score: 92.0 },
+    { name: "Charlie", age: 35, score: 78.5 }
+]);
+
+df.show();
+```
+
+## Package Info
+
+From `package.json`:
+
+```json
+{
+  "name": "@pardox/pardox",
+  "version": "0.3.1",
+  "main": "src/index.js",
+  "dependencies": {
+    "koffi": "^2.9.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+```
+
+## Core Exports
+
+The JavaScript SDK exports from `src/index.js`:
+
+```javascript
+const {
+    DataFrame,
+    Series,
+    read_csv,
+    read_sql,
+    read_prdx,
+    executeSql,
+    read_mysql,
+    execute_mysql,
+    read_sqlserver,
+    execute_sqlserver,
+    read_mongodb,
+    execute_mongodb,
+    getLib
+} = require('@pardox/pardox');
+```
+
+**Available imports:**
+- `DataFrame` - Main DataFrame class
+- `Series` - Column operations and vectorized arithmetic
+- `read_csv()` - Native CSV reader
+- `read_sql()` - Direct SQL query execution
+- `read_prdx()` - PardoX binary format reader
+- `executeSql()` - Execute DDL/DML statements
+- `read_mysql()`, `read_sqlserver()`, `read_mongodb()` - Database readers
+- `execute_mysql()`, `execute_sqlserver()`, `execute_mongodb()` - Database executors
+- `getLib()` - Low-level FFI access
+
+## DataFrame Creation
+
+### From In-Memory Data
+
+```javascript
+const { DataFrame } = require('@pardox/pardox');
+
+// From array of objects (converted to NDJSON internally)
+const df = DataFrame.fromArray([
+    { product: "Laptop", price: 999.99, quantity: 5 },
+    { product: "Mouse", price: 29.99, quantity: 50 },
+    { product: "Keyboard", price: 79.99, quantity: 25 }
+]);
+
+const [rows, cols] = df.shape;
+console.log(`Rows: ${rows}, Columns: ${cols}`);
+console.log('Columns:', df.columns);
+console.log('Types:', df.dtypes);
+```
+
+### From CSV Files
+
+```javascript
+const { DataFrame, read_csv } = require('@pardox/pardox');
+
+// Basic CSV reading
+const df = DataFrame.read_csv('./sales.csv');
+
+// Or using functional API
+const df = read_csv('./sales.csv');
+
+// With manual schema
+const df = DataFrame.read_csv('./sales.csv', {
+    id: 'Int64',
+    name: 'Utf8',
+    amount: 'Float64'
+});
+```
+
+### From SQL Databases
+
+```javascript
+const { DataFrame } = require('@pardox/pardox');
+
+// PostgreSQL
+const df = DataFrame.read_sql(
+    'postgresql://user:pass@localhost:5432/mydb',
+    'SELECT * FROM orders WHERE total > 1000'
+);
+
+// MySQL (native driver)
+const df = DataFrame.read_mysql(
+    'mysql://user:pass@localhost:3306/mydb',
+    'SELECT * FROM customers'
+);
+
+// SQL Server (tiberius driver)
+const df = DataFrame.read_sqlserver(
+    'Server=localhost;Database=mydb;User Id=sa;Password=pwd;TrustServerCertificate=true',
+    'SELECT * FROM inventory'
+);
+
+// MongoDB (native driver)
+const df = DataFrame.read_mongodb(
+    'mongodb://user:pass@localhost:27017',
+    'mydb.orders'  // database.collection
+);
+```
+
+## DataFrame Operations
+
+### Inspection
+
+```javascript
+// Display first/last rows
+df.head(10).show();
+df.tail(5).show();
+
+// Get dimensions
+const [rows, cols] = df.shape;
+
+// Column metadata
+console.log(df.columns);  // ['name', 'age', 'score']
+console.log(df.dtypes);   // { name: 'Utf8', age: 'Int64', score: 'Float64' }
+```
+
+### Slicing with iloc
+
+```javascript
+// Slice rows by position [start, end)
+const subset = df.iloc(100, 200);  // Returns new DataFrame
+
+// Head/tail return new DataFrames
+const first10 = df.head(10);
+const last10 = df.tail(10);
+```
+
+### Column Selection (Proxy-based)
+
+The JavaScript SDK uses a Proxy to enable subscript syntax:
+
+```javascript
+// Get a Series (column view) using subscript
+const ages = df['age'];
+const names = df.name;  // Also works as property access
+
+console.log(ages.dtype);  // 'Int64'
+console.log(ages.name);   // 'age'
+```
+
+### Filtering with Boolean Series
+
+```javascript
+// Create boolean mask
+const mask = df.age.gt(25);
+
+// Apply filter (returns new DataFrame)
+const filtered = df.filter(mask);
+
+// Inline filtering
+const expensive = df.filter(df.price.gt(1000));
+```
+
+### Column Assignment (Proxy-based)
+
+```javascript
+// Add new column from Series arithmetic
+df.doubleAge = df.age.mul(df.age);  // Proxy set
+
+// Or use internal method
+df._setColumn('total', df.price.mul(df.quantity));
+```
+
+## Series Operations
+
+### Arithmetic (Vectorized)
+
+```javascript
+// Series arithmetic returns new Series
+const result = df.price.add(df.tax);
+const result = df.amount.sub(df.discount);
+const result = df.quantity.mul(df.unitPrice);
+const result = df.total.div(df.count);
+const result = df.value.mod(df.divisor);
+
+// Assign result back to DataFrame
+df.netPrice = df.price.sub(df.discount);
+```
+
+### Comparisons
+
+```javascript
+// All comparisons return Boolean Series
+const mask = df.price.gt(100);     // >
+const mask = df.age.gte(18);       // >=
+const mask = df.status.eq('active'); // ==
+const mask = df.score.neq(0);      // !=
+const mask = df.amount.lt(500);    // <
+const mask = df.rating.lte(5);     // <=
+
+// Column vs Column
+const mask = df.price.gt(df.cost);
+
+// Use mask for filtering
+const expensive = df.filter(df.price.gt(1000));
+```
+
+### Aggregations
+
+```javascript
+// Statistical aggregations
+const totalSales = df.amount.sum();
+const averageAge = df.age.mean();
+const minPrice = df.price.min();
+const maxScore = df.score.max();
+const rowCount = df.id.count();
+const stdDev = df.score.std();
+```
+
+## Math Operations
+
+### Native Math Foundation (v0.3.1)
+
+```javascript
+// Columnar addition (SIMD-optimized)
+const resultDf = df.add('price', 'tax');
+console.log(resultDf.columns);  // includes 'result_math_add'
+
+// Columnar subtraction
+const resultDf = df.sub('revenue', 'cost');
+console.log(resultDf['result_math_sub']);
+
+// Columnar multiplication
+const resultDf = df.mul('quantity', 'unitPrice');
+
+// Standard deviation
+const stdValue = df.std('scores');
+
+// Min-Max Scaling to [0, 1]
+const normalized = df.minMaxScale('amount');
+console.log(normalized['result_minmax']);
+```
+
+## Sorting
+
+```javascript
+// CPU sort (ascending)
+const sorted = df.sortValues('age');
+
+// Descending order
+const sorted = df.sortValues('amount', false);
+
+// GPU-accelerated Bitonic sort (for large datasets)
+const sorted = df.sortValues('price', false, true);
+```
+
+## Joins
+
+```javascript
+// Hash join on common column
+const result = df.join(otherDf, { on: 'customerId' });
+
+// With different column names
+const result = df.join(otherDf, {
+    leftOn: 'productId',
+    rightOn: 'id'
+});
+```
+
+## Data Cleaning
+
+```javascript
+// Fill nulls in numeric columns
+df.fillna(0.0);
+
+// Round all numeric columns
+df.round(2);  // 2 decimal places
+
+// Type casting
+df.cast('age', 'Int64');
+df.cast('price', 'Float64');
+```
+
+## Export
+
+### To CSV
+
+```javascript
+df.toCsv('./output.csv');
+```
+
+### To Native Binary (.prdx)
+
+```javascript
+// Write to PardoX binary format
+df.toPrdx('./data.prdx');
+
+// Read back (much faster than CSV)
+const { read_prdx } = require('@pardox/pardox');
+const data = read_prdx('./data.prdx');
+```
+
+### To SQL Databases
+
+```javascript
+// PostgreSQL - Append mode
+const rows = df.toSql(
+    'postgresql://user:pass@localhost/mydb',
+    'sales',
+    'append'
+);
+
+// Upsert with conflict resolution
+const rows = df.toSql(
+    'postgresql://user:pass@localhost/mydb',
+    'users',
+    'upsert',
+    ['id']  // conflict columns
+);
+
+// MySQL
+const rows = df.toMysql(
+    'mysql://user:pass@localhost:3306/mydb',
+    'products',
+    'append'
+);
+
+// SQL Server
+const rows = df.toSqlserver(
+    'Server=localhost;Database=mydb;User Id=sa;Password=pwd;',
+    'inventory'
+);
+
+// MongoDB
+const rows = df.toMongodb(
+    'mongodb://user:pass@localhost:27017',
+    'mydb.orders',
+    'append'  // or 'replace'
+);
+```
+
+### To JavaScript Objects
+
+```javascript
+// Array of objects (records format)
+const records = df.toDict();
+// [{ name: 'Alice', age: 30 }, ...]
+
+// Array of arrays (values format)
+const values = df.toList();
+// [['Alice', 30], ['Bob', 25], ...]
+
+// JSON string
+const jsonStr = df.toJson();
+// '[{"name":"Alice","age":30}, ...]'
+```
+
+## Observer Methods (v0.3.1)
+
+```javascript
+// Value counts (frequency distribution)
+const freq = df.valueCounts('category');
+// { Electronics: 150, Clothing: 100, ... }
+
+// Unique values
+const uniqueVals = df.unique('status');
+// ['active', 'pending', 'completed']
+```
+
+## Execute SQL Statements
+
+```javascript
+const { executeSql, execute_mysql, execute_sqlserver, execute_mongodb } = require('@pardox/pardox');
+
+// PostgreSQL DDL/DML
+const rowsAffected = executeSql(
+    'postgresql://user:pass@localhost/mydb',
+    'CREATE TABLE users (id INT, name TEXT)'
+);
+
+// MySQL
+const rowsAffected = execute_mysql(
+    'mysql://user:pass@localhost:3306/mydb',
+    'UPDATE products SET price = price * 1.1'
+);
+
+// SQL Server
+const rowsAffected = execute_sqlserver(
+    'Server=localhost;Database=mydb;User Id=sa;Password=pwd;',
+    'DELETE FROM logs WHERE created < \'2023-01-01\''
+);
+
+// MongoDB
+const result = execute_mongodb(
+    'mongodb://user:pass@localhost:27017',
+    'mydb',
+    '{"drop": "old_collection"}'
+);
+```
+
+## Error Handling
+
+```javascript
+const { DataFrame } = require('@pardox/pardox');
+
+try {
+    const df = DataFrame.read_csv('./missing_file.csv');
+} catch (e) {
+    console.error('Error:', e.message);
+}
+
+// Check if DataFrame is empty
+if (df.shape[0] === 0) {
+    console.log('DataFrame is empty');
+}
+```
+
+## Memory Management
+
+DataFrames are automatically freed by Node.js garbage collection via FinalizationRegistry. For explicit cleanup:
+
+```javascript
+const df = DataFrame.read_csv('./large_file.csv');
+
+// Do operations...
+
+// Free memory when done (optional - GC will also free)
+df._free();
+```
+
+## Method Signatures
+
+Key method signatures from `src/DataFrame.js`:
+
+```javascript
+class DataFrame {
+    constructor(ptr = null)
+    
+    // Properties
+    get shape()      // [rows, cols]
+    get columns()    // ['col1', 'col2', ...]
+    get dtypes()     // { col1: 'Int64', col2: 'Utf8', ... }
+    
+    // Static factory methods
+    static read_csv(path, schema = null)
+    static read_sql(connectionString, query)
+    static read_mysql(connectionString, query)
+    static read_sqlserver(connectionString, query)
+    static read_mongodb(connectionString, dbDotCollection)
+    static fromArray(data)
+    
+    // Instance methods
+    head(n = 5)
+    tail(n = 5)
+    show(n = 10)
+    toJson(limit = 100)
+    iloc(start, end)
+    cast(col, targetType)
+    join(other, { on, leftOn, rightOn })
+    filter(mask)
+    fillna(val)
+    round(decimals = 0)
+    toCsv(path)
+    toPrdx(path)
+    toSql(connectionString, tableName, mode = 'append', conflictCols = [])
+    toMysql(connectionString, tableName, mode = 'append', conflictCols = [])
+    toSqlserver(connectionString, tableName, mode = 'append', conflictCols = [])
+    toMongodb(connectionString, dbDotCollection, mode = 'append')
+    toDict()
+    toList()
+    valueCounts(col)
+    unique(col)
+    add(colA, colB)
+    sub(colA, colB)
+    mul(colA, colB)
+    std(col)
+    minMaxScale(col)
+    sortValues(by, ascending = true, gpu = false)
+}
+```
+
+## Platform Support
+
+The JavaScript SDK automatically detects your platform and loads the correct binary via Koffi:
+
+- **Linux x64**: `libpardox.so`
+- **macOS Intel**: `libpardox.dylib`
+- **macOS Apple Silicon**: `libpardox.dylib`
+- **Windows x64**: `pardox.dll`
+
+Binaries are located in `libs/` directory.
+
+## TypeScript Support
+
+While the SDK is written in JavaScript, you can use it in TypeScript projects:
+
+```typescript
+import { DataFrame, Series } from '@pardox/pardox';
+
+const df: any = DataFrame.read_csv('./data.csv');
+const col: any = df.name;
+const count: number = col.count();
+```

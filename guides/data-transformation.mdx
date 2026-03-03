@@ -1,0 +1,449 @@
+---
+title: 'Data Transformation'
+description: 'Perform vectorized arithmetic, filtering, sorting, and joins with SIMD-accelerated operations'
+---
+
+PardoX performs all arithmetic and transformations directly on Rust memory buffers using SIMD (Single Instruction, Multiple Data) instructions. No Python objects are created during computation.
+
+## Column Selection
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Select a column — returns a Series (lightweight Rust column pointer)
+    prices = df['price']
+    print(type(prices))  # <class 'pardox.series.Series'>
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Select single column (returns Series)
+    const prices = df.price;
+    const names = df['name'];
+
+    // Using method
+    const col = df.column('price');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Select single column (returns Series)
+    $prices = $df["price"];
+
+    // Using ArrayAccess
+    $names = $df->offsetGet("name");
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  **Zero-Copy Access** - Column selection returns a view into the Rust buffer, not a copy.
+</Info>
+
+## Vectorized Arithmetic
+
+Operations via Python operators (`+`, `-`, `*`, `/`) are dispatched to SIMD-accelerated Rust kernels.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Vector × Vector
+    df['total'] = df['price'] * df['quantity']
+
+    # Vector × Scalar (broadcast)
+    df['tax'] = df['total'] * 0.08
+
+    # Chained expressions
+    df['net_amount'] = (df['total'] + df['tax']) - df['discount']
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Arithmetic operations
+    const s2 = df.price.mul(df.quantity);  // vectorized multiply
+    const s3 = df.total.mul(0.08);         // multiply by scalar
+    const s4 = df.price.add(df.tax);       // vectorized add
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Add new column
+    $df["total"] = $df["price"] * 2;
+
+    // Or use Series methods
+    $total = $df["price"]->mul($df["quantity"]);
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  **SIMD acceleration** - AVX2 (Intel/AMD) and NEON (Apple Silicon) process 4–8 values per CPU cycle — **5x–20x faster** than Python loops.
+</Tip>
+
+## DataFrame Arithmetic Methods
+
+These methods accept column names as strings and return a **new DataFrame** containing the result column.
+
+### Addition
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Returns new DataFrame with column 'result_add'
+    sum_df = df.add("price", "tax")
+    print(sum_df.columns)   # ['result_add']
+    total = sum_df['result_add'].sum()
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Create new column with sum
+    const result = df.add('amount', 'tax');
+    // Result stored in "result_math_add" column
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Create new column with sum
+    $df = $df->add("amount", "tax");
+    // Result stored in "result_math_add" column
+    ```
+  </Tab>
+</Tabs>
+
+### Subtraction
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Returns new DataFrame with column 'result_sub'
+    profit_df = df.sub("revenue", "cost")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const result = df.sub('price', 'discount');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $df = $df->sub("price", "discount");
+    ```
+  </Tab>
+</Tabs>
+
+### Multiplication
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Returns new DataFrame with column 'result_mul'
+    revenue_df = df.mul("price", "quantity")
+    print(f"Revenue std dev: {revenue_df.std('result_mul'):,.2f}")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const revenue = df.mul('price', 'quantity');
+    const stdValue = revenue.std('result_mul');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $revenue = $df->mul("price", "quantity");
+    $stdValue = $revenue->std("result_mul");
+    ```
+  </Tab>
+</Tabs>
+
+## Type Casting
+
+Convert a column to a different type in-place.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Required before arithmetic when column was inferred as Int64
+    df.cast("quantity", "Float64")
+    df.cast("id", "Utf8")     # convert numeric ID to string
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    df.cast('quantity', 'Float64');
+    df.cast('id', 'Utf8');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Convert to float
+    $df->cast("quantity", "Float64");
+    $df->cast("id", "Utf8");
+    ```
+  </Tab>
+</Tabs>
+
+**Supported types:** `Int64`, `Float64`, `Utf8`
+
+## Sorting
+
+Sort the DataFrame by a column. Returns a **new sorted DataFrame**.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Ascending sort (CPU, Rust parallel merge sort)
+    sorted_df = df.sort_values("price", ascending=True)
+
+    # Descending sort
+    sorted_df = df.sort_values("price", ascending=False)
+
+    # GPU Bitonic sort (falls back to CPU if GPU unavailable)
+    sorted_df = df.sort_values("price", ascending=True, gpu=True)
+
+    print(f"Sorted {sorted_df.shape[0]:,} rows")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Sort by name ascending
+    const sorted = df.sortValues('name');
+
+    // Sort by amount descending
+    const sorted = df.sortValues('amount', false);
+
+    // Use GPU for large datasets
+    const sorted = df.sortValues('amount', false, true);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Sort by name ascending
+    $sorted = $df->sortValues("name");
+
+    // Sort by amount descending
+    $sorted = $df->sortValues("amount", false);
+
+    // Use GPU for large datasets
+    $sorted = $df->sortValues("amount", false, true);
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  **GPU fallback** - If a GPU is not available or the `wgpu` backend cannot initialize, PardoX automatically uses the CPU sort and logs `[PardoX GPU Sort] GPU not available, using CPU sort.` to stderr. The result is identical.
+</Info>
+
+## Filtering
+
+Apply a boolean Series as a row filter.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Single condition
+    mask = df['price'] > 100.0
+    filtered = df.filter(mask)
+
+    # Combined conditions
+    mask2 = df['state'].eq("TX")
+    result = df.filter(mask).filter(mask2)
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Filter using a mask Series
+    const mask = df.age.gt(25);
+    const filtered = df.filter(mask);
+
+    // Direct comparison returns a mask
+    const filtered2 = df.filter(df.amount.gt(1000));
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Create mask using Series comparison
+    $mask = $df["age"]->gt(25);
+    $filtered = $df->filter($mask);
+    ```
+  </Tab>
+</Tabs>
+
+### Comparison Operators
+
+| Method | Operator |
+|--------|----------|
+| `s.eq(val)` | `==` |
+| `s.neq(val)` | `!=` |
+| `s.gt(val)` | `>` |
+| `s.gte(val)` | `>=` |
+| `s.lt(val)` | `<` |
+| `s.lte(val)` | `<=` |
+
+## Data Cleaning
+
+### Fill Null Values
+
+Fills `NaN` / null values in all numeric columns in-place.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    df.fillna(0.0)   # replaces nulls with 0 — modifies buffer directly
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    df.fillna(0.0);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Fill numeric columns with 0
+    $df->fillna(0.0);
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  **In-place** - `fillna` modifies the DataFrame in-place. No need to reassign: `df = df.fillna(0.0)`.
+</Warning>
+
+### Round Values
+
+Rounds all floating-point columns to N decimal places in-place.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    df.round(2)   # round all numerics to 2 decimal places
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    df.round(2);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Round to 2 decimal places
+    $df->round(2);
+    ```
+  </Tab>
+</Tabs>
+
+## Slicing (iloc)
+
+Select a range of rows by position.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Rows 100 to 199 (start inclusive, end exclusive)
+    subset = df.iloc(100, 200)
+    print(subset.shape)   # (100, n_cols)
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Rows 10-20
+    const subset = df.iloc(10, 20);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Rows 10-20
+    $subset = $df->iloc(10, 20);
+    ```
+  </Tab>
+</Tabs>
+
+## Joins
+
+Hash-join two DataFrames on a key column.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Inner join on the same key column name
+    result = orders.join(customers, on="customer_id")
+
+    # Join on different column names
+    result = orders.join(customers, left_on="cust_id", right_on="id")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Inner join on client_id
+    const result = df.join(clients_df, { on: 'client_id' });
+
+    // With different column names
+    const result = df.join(clients_df, {
+        leftOn: 'customer_id',
+        rightOn: 'id'
+    });
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    // Inner join on client_id
+    $result = $df->join($clients_df, [
+        "on" => "client_id"
+    ]);
+
+    // With different column names
+    $result = $df->join($clients_df, [
+        "leftOn" => "customer_id",
+        "rightOn" => "id"
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+## Min-Max Normalization
+
+Normalizes a column to the range `[0, 1]`. Returns a new DataFrame with column `result_minmax`.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    # Normalize prices to [0, 1]
+    normed_df = df.min_max_scale("price")
+    print(normed_df['result_minmax'].min())   # ~0.0
+    print(normed_df['result_minmax'].max())   # ~1.0
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const scaled = df.minMaxScale('amount');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $df = $df->minMaxScale("amount");
+    ```
+  </Tab>
+</Tabs>
+
+## Performance Best Practices
+
+<Check>
+  **Do this**
+  - Use **column arithmetic** (`df['c'] = df['a'] * df['b']`) for all row-level computations.
+  - Cast columns to `Float64` before arithmetic when they were inferred as `Int64`.
+  - Chain operations — Python handles precedence, Rust handles execution.
+</Check>
+
+<Warning>
+  **Avoid this**
+  - **Python loops** over rows (`for row in df`) destroy performance. Always use column operations.
+</Warning>
+
+```python
+# ❌ 100x-1000x SLOWER — Python loop
+for i in range(len(df)):
+    df['new'][i] = df['a'][i] + df['b'][i]
+
+# ✅ FAST — SIMD vectorized
+df['new'] = df['a'] + df['b']
+```

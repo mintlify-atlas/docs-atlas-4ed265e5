@@ -1,0 +1,409 @@
+---
+title: 'Series'
+description: 'PHP Series class representing a single column in PardoX'
+---
+
+## Overview
+
+The `Series` class represents a single column of data in PardoX. Series objects are returned when accessing a DataFrame column and support vectorized operations.
+
+## Creating Series
+
+Series are typically created by accessing DataFrame columns:
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = new DataFrame([
+    ["name" => "Alice", "age" => 30, "score" => 85.5],
+    ["name" => "Bob", "age" => 25, "score" => 92.0],
+    ["name" => "Charlie", "age" => 35, "score" => 78.5]
+]);
+
+// Get a Series
+$ages = $df["age"];
+$names = $df["name"];
+```
+
+## Arithmetic Operations
+
+### add()
+
+Add another Series or scalar value element-wise.
+
+<ParamField path="other" type="Series|numeric" required>
+  Series or scalar value to add
+</ParamField>
+
+```php
+<?php
+
+$s = $df["age"];
+
+// Add two Series
+$s2 = $s->add($s);
+
+// Add scalar (if supported)
+$s2 = $s->add(5);
+```
+
+### sub()
+
+Subtract another Series or scalar value element-wise.
+
+<ParamField path="other" type="Series|numeric" required>
+  Series or scalar value to subtract
+</ParamField>
+
+```php
+<?php
+
+$s = $df["score"];
+$s2 = $s->sub($s);
+```
+
+### mul()
+
+Multiply by scalar value.
+
+<ParamField path="scalar" type="numeric" required>
+  Scalar value to multiply by
+</ParamField>
+
+```php
+<?php
+
+$s = $df["amount"];
+$doubled = $s->mul(2);
+```
+
+### div()
+
+Divide by scalar value.
+
+<ParamField path="scalar" type="numeric" required>
+  Scalar value to divide by
+</ParamField>
+
+```php
+<?php
+
+$s = $df["total"];
+$halved = $s->div(2);
+```
+
+## Comparison Operations
+
+Comparison methods return boolean Series that can be used for filtering.
+
+### eq()
+
+Element-wise equality comparison.
+
+<ParamField path="value" type="mixed" required>
+  Value to compare against
+</ParamField>
+
+```php
+<?php
+
+$mask = $df["name"]->eq("Alice");
+$filtered = $df->filter($mask);
+```
+
+### neq()
+
+Element-wise inequality comparison.
+
+<ParamField path="value" type="mixed" required>
+  Value to compare against
+</ParamField>
+
+```php
+<?php
+
+$mask = $df["status"]->neq("inactive");
+$filtered = $df->filter($mask);
+```
+
+### gt()
+
+Element-wise greater than comparison.
+
+<ParamField path="value" type="numeric" required>
+  Value to compare against
+</ParamField>
+
+```php
+<?php
+
+$mask = $df["age"]->gt(25);
+$filtered = $df->filter($mask);
+```
+
+### gte()
+
+Element-wise greater than or equal comparison.
+
+<ParamField path="value" type="numeric" required>
+  Value to compare against
+</ParamField>
+
+```php
+<?php
+
+$mask = $df["age"]->gte(18);
+$adults = $df->filter($mask);
+```
+
+### lt()
+
+Element-wise less than comparison.
+
+<ParamField path="value" type="numeric" required>
+  Value to compare against
+</ParamField>
+
+```php
+<?php
+
+$mask = $df["score"]->lt(80);
+$low_scores = $df->filter($mask);
+```
+
+### lte()
+
+Element-wise less than or equal comparison.
+
+<ParamField path="value" type="numeric" required>
+  Value to compare against
+</ParamField>
+
+```php
+<?php
+
+$mask = $df["age"]->lte(65);
+$filtered = $df->filter($mask);
+```
+
+## Aggregation Methods
+
+### sum()
+
+Calculate the sum of all values in the Series.
+
+```php
+<?php
+
+$total = $df["amount"]->sum();
+echo "Total: $total";
+```
+
+### mean()
+
+Calculate the arithmetic mean of the Series.
+
+```php
+<?php
+
+$average = $df["score"]->mean();
+echo "Average score: $average";
+```
+
+### min()
+
+Find the minimum value in the Series.
+
+```php
+<?php
+
+$minimum = $df["age"]->min();
+echo "Youngest: $minimum";
+```
+
+### max()
+
+Find the maximum value in the Series.
+
+```php
+<?php
+
+$maximum = $df["score"]->max();
+echo "Highest score: $maximum";
+```
+
+### count()
+
+Count the number of non-null values.
+
+```php
+<?php
+
+$count = $df["name"]->count();
+echo "Total records: $count";
+```
+
+### std()
+
+Calculate the standard deviation.
+
+```php
+<?php
+
+$stdDev = $df["score"]->std();
+echo "Standard deviation: $stdDev";
+```
+
+## Combining Filters
+
+You can combine multiple comparison operations for complex filtering:
+
+```php
+<?php
+
+// Multiple conditions
+$mask1 = $df["age"]->gte(25);
+$mask2 = $df["score"]->gt(80);
+
+// Manual combination (if and() method is available)
+// $combined = $mask1->and($mask2);
+// $filtered = $df->filter($combined);
+
+// Or apply filters sequentially
+$filtered = $df->filter($mask1);
+$filtered = $filtered->filter($mask2);
+```
+
+## Usage Examples
+
+### Basic Arithmetic
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = new DataFrame([
+    ["price" => 100, "quantity" => 5],
+    ["price" => 200, "quantity" => 3],
+    ["price" => 150, "quantity" => 4]
+]);
+
+// Calculate total
+$price = $df["price"];
+$qty = $df["quantity"];
+$total = $price->mul($qty->tolist()[0]); // If scalar multiplication supported
+```
+
+### Filtering Data
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = new DataFrame([
+    ["name" => "Alice", "age" => 30, "score" => 85],
+    ["name" => "Bob", "age" => 25, "score" => 92],
+    ["name" => "Charlie", "age" => 35, "score" => 78],
+    ["name" => "David", "age" => 28, "score" => 88]
+]);
+
+// Filter for age > 25
+$adults = $df->filter($df["age"]->gt(25));
+
+// Filter for high scores
+$high_performers = $df->filter($df["score"]->gte(85));
+```
+
+### Statistical Analysis
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = DataFrame::read_csv("sales.csv");
+
+$revenue = $df["revenue"];
+
+// Calculate statistics
+$stats = [
+    "total" => $revenue->sum(),
+    "average" => $revenue->mean(),
+    "min" => $revenue->min(),
+    "max" => $revenue->max(),
+    "std_dev" => $revenue->std(),
+    "count" => $revenue->count()
+];
+
+print_r($stats);
+```
+
+### Data Validation
+
+```php
+<?php
+
+use PardoX\DataFrame;
+
+$df = DataFrame::read_csv("users.csv");
+
+// Find users with invalid ages
+$invalid_ages = $df->filter(
+    $df["age"]->lt(0)
+);
+
+if ($invalid_ages->shape[0] > 0) {
+    echo "Found {$invalid_ages->shape[0]} invalid age records";
+    echo $invalid_ages->show();
+}
+```
+
+## Type Support
+
+Series support various data types:
+
+- **Int64**: 64-bit integers
+- **Float64**: 64-bit floating point numbers
+- **Utf8**: String values
+- **Boolean**: True/false values (from comparisons)
+
+```php
+<?php
+
+// Integer series
+$ages = $df["age"];  // Int64
+
+// Float series
+$scores = $df["score"];  // Float64
+
+// String series
+$names = $df["name"];  // Utf8
+
+// Boolean series (from comparison)
+$mask = $df["age"]->gt(25);  // Boolean
+```
+
+## Performance Notes
+
+- All operations are vectorized and executed in Rust for high performance
+- Comparisons create boolean masks without copying data
+- Aggregations are computed using SIMD instructions when possible
+- Series operations are lazy-evaluated in some cases for optimization
+
+```php
+<?php
+
+// Efficient: operations are vectorized
+$result = $df["large_column"]->mul(2)->add($df["other_column"]);
+
+// Avoid: iterating over Series in PHP
+// This is slow - let Rust handle the operations
+$values = $df["column"]->tolist();
+foreach ($values as $val) {
+    // Avoid this pattern
+}
+```

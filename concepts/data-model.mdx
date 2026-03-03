@@ -1,0 +1,740 @@
+---
+title: Data Model
+description: Understanding PardoX's DataFrame, Series, column types, and the native .prdx binary format
+---
+
+## Overview
+
+PardoX's data model is built around two core abstractions:
+
+1. **DataFrame** — A tabular data structure with named columns (like a SQL table or Excel sheet)
+2. **Series** — A single column within a DataFrame (like a vector or array)
+
+Both are lightweight **pointers to Rust memory**, not Python/JavaScript/PHP objects. This design enables zero-copy operations and consistent performance across all SDKs.
+
+---
+
+## DataFrame
+
+### Conceptual Structure
+
+A DataFrame is a collection of columns stored in **columnar format** (column-major order):
+
+```
+┌─────────────────────────────────────────┐
+│           DataFrame (1M rows)           │
+├─────────────┬─────────────┬─────────────┤
+│   "id"      │  "price"    │ "quantity"  │
+│   Int64     │  Float64    │  Float64    │
+├─────────────┼─────────────┼─────────────┤
+│ [1,2,3,...] │ [19.99,...] │ [10,5,...]  │
+│             │             │             │
+│  Contiguous │  Contiguous │  Contiguous │
+│    Array    │    Array    │    Array    │
+└─────────────┴─────────────┴─────────────┘
+```
+
+**Why columnar?**
+
+<CardGroup cols={2}>
+  <Card title="Cache Efficiency" icon="bolt">
+    When summing a column, CPU loads sequential memory — 10x faster than row-major
+  </Card>
+  <Card title="SIMD Acceleration" icon="microchip">
+    Vectorized operations process entire columns without pointer chasing
+  </Card>
+  <Card title="Compression" icon="compress">
+    Columns compress better (same type per column)
+  </Card>
+  <Card title="Lazy Operations" icon="hourglass">
+    Operations only touch needed columns, not entire rows
+  </Card>
+</CardGroup>
+
+### Creating DataFrames
+
+<CodeGroup>
+```python Python
+import pardox as px
+
+# From CSV
+df = px.read_csv("sales.csv")
+
+# From dict
+df = px.DataFrame([
+    {"id": 1, "price": 19.99, "qty": 10},
+    {"id": 2, "price": 29.99, "qty": 5}
+])
+
+# From database
+from pardox.io import read_sql
+df = read_sql(
+    "postgresql://user:pass@localhost/db",
+    "SELECT * FROM orders"
+)
+
+# From PRDX binary
+df = px.read_prdx("data.prdx")
+
+# From Apache Arrow
+import pyarrow as pa
+arrow_table = pa.Table.from_pydict({"a": [1, 2, 3]})
+df = px.from_arrow(arrow_table)
+```
+
+```javascript JavaScript
+const px = require('pardox');
+
+// From CSV
+const df = px.readCsv('sales.csv');
+
+// From array
+const df = px.DataFrame.fromArray([
+    {id: 1, price: 19.99, qty: 10},
+    {id: 2, price: 29.99, qty: 5}
+]);
+
+// From database
+const df = px.readSql(
+    'postgresql://user:pass@localhost/db',
+    'SELECT * FROM orders'
+);
+```
+
+```php PHP
+<?php
+use PardoX\PardoX as px;
+
+// From CSV
+$df = px::readCsv('sales.csv');
+
+// From database
+$df = px::readSql(
+    'postgresql://user:pass@localhost/db',
+    'SELECT * FROM orders'
+);
+```
+</CodeGroup>
+
+### DataFrame Properties
+
+#### `shape` — Dimensions
+
+Returns `(rows, columns)` tuple:
+
+```python
+df.shape  # (1000000, 3)
+rows, cols = df.shape
+print(f"{rows:,} rows × {cols} columns")
+# Output: 1,000,000 rows × 3 columns
+```
+
+#### `columns` — Column Names
+
+Returns list of column names:
+
+```python
+df.columns  # ['id', 'price', 'quantity', 'state']
+```
+
+#### `dtypes` — Column Types
+
+Returns dictionary mapping column names to types:
+
+```python
+df.dtypes
+# {'id': 'Int64', 'price': 'Float64', 'quantity': 'Float64', 'state': 'Utf8'}
+```
+
+<Info>
+PardoX supports **three data types**: `Int64`, `Float64`, and `Utf8`. This simplicity enables aggressive SIMD optimizations.
+</Info>
+
+---
+
+## Series
+
+### Column Selection
+
+Selecting a column returns a **Series** object:
+
+```python
+prices = df['price']  # Returns Series, not a copy
+type(prices)  # <class 'pardox.series.Series'>
+```
+
+**Key characteristics:**
+
+- **Zero-copy view** — Series points to the same Rust buffer as the DataFrame
+- **No independent lifecycle** — Series is invalidated if parent DataFrame is freed
+- **Lazy evaluation** — Operations return new Series/DataFrames without mutating originals
+
+### Series Properties
+
+```python
+prices = df['price']
+
+prices.name   # 'price'
+prices.dtype  # 'Float64'
+len(prices)   # Number of rows (via parent DataFrame)
+```
+
+### Vectorized Arithmetic
+
+All arithmetic returns a **new Series** with the result:
+
+```python
+# Vector × Vector
+revenue = df['price'] * df['quantity']  # Element-wise multiply
+type(revenue)  # Series
+
+# Vector × Scalar
+discounted = df['price'] * 0.9  # Apply 10% discount
+
+# Chained operations
+net = (df['price'] * df['quantity']) - df['discount']
+```
+
+**Behind the scenes (Rust):**
+
+```rust
+// Simplified SIMD multiplication
+pub fn multiply_f64(a: &[f64], b: &[f64]) -> Vec<f64> {
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| x * y)  // LLVM auto-vectorizes to AVX2/NEON
+        .collect()
+}
+```
+
+<Tip>
+Vectorized operations are **5x-20x faster** than Python loops because they execute in Rust with SIMD instructions.
+</Tip>
+
+### Comparison Operations
+
+Comparisons return **boolean Series** for filtering:
+
+```python
+# Greater than
+mask = df['price'] > 100.0
+
+# Equality
+mask = df['state'].eq("TX")
+
+# Chained conditions
+mask = (df['price'] > 50) & (df['quantity'] < 10)
+
+filtered_df = df.filter(mask)
+```
+
+**Available comparisons:**
+
+| Method | Operator | Description |
+|--------|----------|-------------|
+| `s.eq(val)` | `==` | Equal to |
+| `s.neq(val)` | `!=` | Not equal |
+| `s.gt(val)` | `>` | Greater than |
+| `s.gte(val)` | `>=` | Greater or equal |
+| `s.lt(val)` | `<` | Less than |
+| `s.lte(val)` | `<=` | Less or equal |
+
+### Aggregations
+
+Series support common statistical operations:
+
+```python
+prices = df['price']
+
+prices.sum()    # Total: 1234567.89
+prices.mean()   # Average: 45.67
+prices.min()    # Minimum: 5.00
+prices.max()    # Maximum: 999.99
+prices.std()    # Standard deviation: 23.45
+prices.count()  # Non-null count: 1000000
+```
+
+<Check>
+All aggregations execute in **pure Rust** with no NumPy dependency. They're as fast as NumPy but work in JavaScript and PHP too.
+</Check>
+
+---
+
+## Column Types
+
+### Int64 — 64-bit Integers
+
+**Range:** `-9,223,372,036,854,775,808` to `9,223,372,036,854,775,807`
+
+**Use cases:**
+- IDs, counts, row numbers
+- Unix timestamps
+- Large integers that don't fit in 32-bit
+
+**Example:**
+
+```python
+df = px.read_csv("users.csv", schema={
+    "user_id": "Int64",
+    "signup_timestamp": "Int64"
+})
+```
+
+**Arithmetic:**
+
+```python
+# Must cast to Float64 for arithmetic
+df.cast("quantity", "Float64")
+df['total'] = df['price'] * df['quantity']
+```
+
+<Warning>
+Int64 columns don't support arithmetic operations directly. Cast to Float64 first using `df.cast("col", "Float64")`.
+</Warning>
+
+### Float64 — 64-bit Floating Point
+
+**Precision:** ~15-17 decimal digits  
+**Range:** ±1.7E±308
+
+**Use cases:**
+- Prices, amounts, percentages
+- Scientific measurements
+- Any numeric computation
+
+**Example:**
+
+```python
+df = px.read_csv("sales.csv", schema={
+    "price": "Float64",
+    "tax": "Float64",
+    "total": "Float64"
+})
+
+# All arithmetic works
+df['net'] = (df['price'] + df['tax']) * 1.05
+```
+
+**NaN handling:**
+
+```python
+# Fill missing values
+df.fillna(0.0)
+
+# Round to 2 decimals
+df.round(2)
+```
+
+### Utf8 — Unicode Strings
+
+**Encoding:** UTF-8  
+**Max length:** Limited by available memory
+
+**Use cases:**
+- Names, addresses, categories
+- JSON strings
+- Any text data
+
+**Example:**
+
+```python
+df = px.read_csv("customers.csv", schema={
+    "name": "Utf8",
+    "state": "Utf8",
+    "email": "Utf8"
+})
+
+# String comparison
+mask = df['state'].eq("California")
+ca_customers = df.filter(mask)
+
+# Export functions return strings
+json_str = df.to_json()  # Full DataFrame as JSON string
+unique_states = df.unique("state")  # List of unique values
+```
+
+<Info>
+Utf8 columns use Rust's native `String` type, which is always valid UTF-8. Invalid UTF-8 sequences are rejected at load time.
+</Info>
+
+---
+
+## Type Inference and Casting
+
+### Automatic Inference
+
+When reading CSV without a schema, PardoX infers types from the first rows:
+
+```python
+df = px.read_csv("data.csv")  # Auto-detect types
+
+print(df.dtypes)
+# {'id': 'Int64', 'price': 'Float64', 'name': 'Utf8'}
+```
+
+**Inference rules:**
+
+1. All digits → `Int64`
+2. Digits with decimal point → `Float64`
+3. Anything else → `Utf8`
+
+### Manual Schema
+
+Override inference with explicit schema:
+
+```python
+df = px.read_csv("data.csv", schema={
+    "id": "Utf8",        # Force ID as string
+    "price": "Float64",
+    "quantity": "Float64"  # Convert int to float
+})
+```
+
+### Runtime Casting
+
+Change column type after loading:
+
+```python
+# Convert string to int
+df.cast("user_id", "Int64")
+
+# Convert int to float for arithmetic
+df.cast("quantity", "Float64")
+
+# Convert number to string
+df.cast("postal_code", "Utf8")
+```
+
+<Tip>
+Casting is **in-place** and returns `self` for method chaining:
+
+```python
+df.cast("qty", "Float64").cast("id", "Utf8")
+```
+</Tip>
+
+---
+
+## The Native `.prdx` Format
+
+### Design Philosophy
+
+The `.prdx` binary format is optimized for **instant persistence** with zero parsing overhead:
+
+```
+┌───────────────────────────────┐
+│     Header (256 bytes)        │  Magic, version, row count
+├───────────────────────────────┤
+│     Schema Block              │  Column names & types
+├───────────────────────────────┤
+│  Column 0: Int64 Array        │  8 bytes × N rows
+├───────────────────────────────┤
+│  Column 1: Float64 Array      │  8 bytes × N rows
+├───────────────────────────────┤
+│  Column 2: Utf8 Offsets       │  Pointers to strings
+├───────────────────────────────┤
+│  Column 2: Utf8 Data          │  Concatenated string bytes
+└───────────────────────────────┘
+```
+
+### File Structure
+
+#### Header Block (256 bytes)
+
+```rust
+struct PrdxHeader {
+    magic: [u8; 4],        // [0x50, 0x52, 0x44, 0x58] "PRDX"
+    version: u32,          // Format version (currently 1)
+    row_count: u64,        // Number of rows
+    col_count: u32,        // Number of columns
+    schema_offset: u64,    // Byte offset to schema block
+    data_offset: u64,      // Byte offset to data blocks
+    reserved: [u8; 224],   // Future use
+}
+```
+
+#### Schema Block
+
+Stores column metadata:
+
+```json
+[
+  {"name": "id", "type": 0},       // 0 = Int64
+  {"name": "price", "type": 1},    // 1 = Float64
+  {"name": "state", "type": 2}     // 2 = Utf8
+]
+```
+
+#### Data Blocks
+
+Each column stored as a contiguous array:
+
+- **Int64/Float64:** Direct binary representation (8 bytes per value)
+- **Utf8:** Offset array + concatenated string buffer
+
+### Reading PRDX Files
+
+Loading a `.prdx` file is a **near-zero-copy operation**:
+
+```python
+df = px.read_prdx("sales.prdx")
+```
+
+**Behind the scenes:**
+
+<Steps>
+  <Step title="Memory-map file">
+    `mmap()` the entire file into virtual memory
+  </Step>
+  
+  <Step title="Parse header">
+    Read 256-byte header to get row count and schema offset
+  </Step>
+  
+  <Step title="Load schema">
+    Deserialize schema JSON (typically &lt;1KB)
+  </Step>
+  
+  <Step title="Map columns">
+    Create Rust slices pointing directly to mmap'd column arrays
+  </Step>
+</Steps>
+
+**Performance:**
+
+```python
+import time
+
+# 2 GB file with 50M rows
+start = time.time()
+df = px.read_prdx("large.prdx")
+print(f"Loaded in {time.time() - start:.2f}s")
+# Output: Loaded in 0.43s
+```
+
+<Check>
+**Benchmark:** PRDX achieves **~4.6 GB/s** throughput on NVMe SSDs — **10x faster than Parquet, 20x faster than CSV**.
+</Check>
+
+### Writing PRDX Files
+
+```python
+df = px.read_csv("sales.csv")  # Load from CSV
+df.to_prdx("sales.prdx")       # Save to binary format
+
+# Subsequent loads are instant
+df = px.read_prdx("sales.prdx")
+```
+
+**Use cases:**
+
+<CardGroup cols={2}>
+  <Card title="Repeated Reads" icon="rotate">
+    ETL pipelines that load the same dataset multiple times
+  </Card>
+  <Card title="Caching" icon="database">
+    Cache database query results for offline analysis
+  </Card>
+  <Card title="Checkpoints" icon="bookmark">
+    Save intermediate results in long data transformations
+  </Card>
+  <Card title="Distribution" icon="share">
+    Share datasets between team members (cross-platform)
+  </Card>
+</CardGroup>
+
+### PRDX vs Other Formats
+
+| Format | Read Speed (2GB) | Write Speed | Compression | Cross-Language |
+|--------|-----------------|-------------|-------------|----------------|
+| CSV | 8s | Fast | None | ✅ |
+| Parquet | 3s | Slow | Good | ✅ |
+| **PRDX** | **0.5s** | **Fast** | None | ✅ |
+| Pickle | 2s | Fast | Good | ❌ Python-only |
+| Feather | 1s | Fast | Light | ✅ |
+
+<Info>
+PRDX trades compression for speed. For archival storage, use Parquet. For hot data, use PRDX.
+</Info>
+
+---
+
+## Data Mutation
+
+### Immutable by Default
+
+Most operations return **new DataFrames** without mutating the original:
+
+```python
+df = px.read_csv("sales.csv")
+
+# Returns NEW DataFrame
+sorted_df = df.sort_values("price")
+
+# Original unchanged
+print(df.shape)  # Still original order
+print(sorted_df.shape)  # Sorted version
+```
+
+### In-Place Operations
+
+Few operations modify the DataFrame directly:
+
+```python
+# In-place fill
+df.fillna(0.0)  # Modifies df directly
+
+# In-place round
+df.round(2)  # Modifies df directly
+
+# In-place cast
+df.cast("qty", "Float64")  # Modifies df directly
+```
+
+<Warning>
+In-place operations **modify the underlying Rust buffer**. All Series/DataFrames pointing to the same buffer are affected.
+</Warning>
+
+### Column Assignment
+
+Adding columns mutates the DataFrame:
+
+```python
+df['revenue'] = df['price'] * df['quantity']
+# df now has a new 'revenue' column
+
+print(df.columns)
+# ['id', 'price', 'quantity', 'revenue']
+```
+
+---
+
+## Memory Management
+
+### Reference Counting (Python)
+
+Python DataFrame wrapper handles cleanup automatically:
+
+```python
+class DataFrame:
+    def __init__(self, ptr):
+        self._ptr = ptr  # Opaque Rust pointer
+    
+    def __del__(self):
+        if self._ptr:
+            lib.pardox_free_manager(self._ptr)  # Free Rust memory
+```
+
+When Python garbage collector deletes the DataFrame object, Rust memory is freed.
+
+### Manual Cleanup (JavaScript/PHP)
+
+JavaScript and PHP require explicit cleanup:
+
+```javascript
+// JavaScript
+const df = px.readCsv('data.csv');
+try {
+    // Use df...
+} finally {
+    df.free();  // Required!
+}
+```
+
+```php
+// PHP
+$df = px::readCsv('data.csv');
+try {
+    // Use df...
+} finally {
+    $df->free();  // Required!
+}
+```
+
+<Warning>
+Failing to call `df.free()` in JavaScript/PHP causes **memory leaks**. Python handles this automatically.
+</Warning>
+
+---
+
+## Data Model Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Float64 for all numeric computation">
+    Int64 doesn't support arithmetic. Cast to Float64 first:
+    
+    ```python
+    df.cast("quantity", "Float64")
+    df['revenue'] = df['price'] * df['quantity']
+    ```
+  </Accordion>
+  
+  <Accordion title="Specify schema for large CSVs">
+    Type inference scans rows, slowing load. Provide schema:
+    
+    ```python
+    df = px.read_csv("large.csv", schema={
+        "id": "Int64",
+        "amount": "Float64"
+    })
+    ```
+  </Accordion>
+  
+  <Accordion title="Use .prdx for repeated reads">
+    Convert CSV to PRDX for 10x-20x faster loads:
+    
+    ```python
+    # One-time conversion
+    df = px.read_csv("sales.csv")
+    df.to_prdx("sales.prdx")
+    
+    # Future loads are instant
+    df = px.read_prdx("sales.prdx")
+    ```
+  </Accordion>
+  
+  <Accordion title="Avoid row iteration">
+    Never loop over rows in Python. Use column operations:
+    
+    ```python
+    # ❌ SLOW (1000x slower)
+    for i in range(len(df)):
+        df['new'][i] = df['a'][i] + df['b'][i]
+    
+    # ✅ FAST (SIMD vectorized)
+    df['new'] = df['a'] + df['b']
+    ```
+  </Accordion>
+  
+  <Accordion title="Filter early, aggregate late">
+    Reduce dataset size before expensive operations:
+    
+    ```python
+    # ✅ Good: filter then aggregate
+    df_filtered = df.filter(df['price'] > 100)
+    total = df_filtered['price'].sum()
+    
+    # ❌ Bad: aggregate then filter
+    # (processes entire dataset)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/concepts/architecture">
+    Understand the Rust core and zero-copy design
+  </Card>
+  <Card title="I/O Operations" icon="file" href="/guides/io-operations">
+    Read/write CSV, PRDX, and databases
+  </Card>
+  <Card title="Data Mutation" icon="wand-magic-sparkles" href="/guides/data-transformation">
+    Vectorized arithmetic and transformations
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/python/dataframe">
+    Complete DataFrame and Series method docs
+  </Card>
+</CardGroup>

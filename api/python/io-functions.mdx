@@ -1,0 +1,351 @@
+---
+title: 'I/O Functions'
+description: 'Native Rust-powered data ingestion and export functions'
+---
+
+## Import Functions
+
+### read_csv()
+
+Reads a CSV file directly into PardoX using the native Rust engine.
+
+<ParamField path="path" type="str" required>
+  Path to the CSV file
+</ParamField>
+
+<ParamField path="schema" type="dict" default="None">
+  Optional manual schema definition: `{"column_name": "type", ...}`
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  PardoX DataFrame containing the CSV data
+</ResponseField>
+
+```python
+import pardox as pdx
+
+# Auto-detect schema
+df = pdx.read_csv("data.csv")
+
+# With explicit schema
+df = pdx.read_csv("data.csv", schema={
+    "user_id": "Int64",
+    "price": "Float64",
+    "name": "Utf8"
+})
+```
+
+<Note>
+  The Rust CSV reader uses a 16MB chunk size by default for optimal performance.
+</Note>
+
+---
+
+### read_sql()
+
+Reads data directly from a PostgreSQL database using PardoX's native Rust driver.
+
+<ParamField path="connection_string" type="str" required>
+  PostgreSQL connection URL (e.g., "postgresql://user:pass@localhost:5432/db")
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  SQL query to execute (e.g., "SELECT * FROM clients")
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  PardoX DataFrame containing the query results
+</ResponseField>
+
+```python
+df = pdx.read_sql(
+    connection_string="postgresql://user:pass@localhost:5432/mydb",
+    query="SELECT * FROM orders WHERE status = 'active'"
+)
+```
+
+<Warning>
+  This function bypasses Python completely. The Rust engine connects to the database, executes the query, and fills memory buffers directly.
+</Warning>
+
+---
+
+### read_mysql()
+
+Reads data from a MySQL database using PardoX's native Rust driver.
+
+<ParamField path="connection_string" type="str" required>
+  MySQL URL (e.g. "mysql://user:pass@host:3306/db")
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  SQL query string
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  PardoX DataFrame
+</ResponseField>
+
+```python
+df = pdx.read_mysql(
+    connection_string="mysql://root:password@localhost:3306/analytics",
+    query="SELECT * FROM events LIMIT 10000"
+)
+```
+
+---
+
+### read_sqlserver()
+
+Reads data from SQL Server using PardoX's native Rust driver (tiberius).
+
+<ParamField path="connection_string" type="str" required>
+  ADO.NET connection string (e.g. "Server=localhost,1433;Database=mydb;User Id=sa;Password=pwd;TrustServerCertificate=true")
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  SQL query string
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  PardoX DataFrame
+</ResponseField>
+
+```python
+df = pdx.read_sqlserver(
+    connection_string="Server=localhost,1433;Database=mydb;User Id=sa;Password=MyPass123",
+    query="SELECT TOP 1000 * FROM sales"
+)
+```
+
+---
+
+### read_mongodb()
+
+Reads a MongoDB collection into a PardoX DataFrame using the native Rust driver.
+
+<ParamField path="connection_string" type="str" required>
+  MongoDB URI (e.g. "mongodb://user:pass@host:27017")
+</ParamField>
+
+<ParamField path="db_dot_collection" type="str" required>
+  Target as "database.collection" (e.g. "mydb.orders")
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  PardoX DataFrame
+</ResponseField>
+
+```python
+df = pdx.read_mongodb(
+    connection_string="mongodb://localhost:27017",
+    db_dot_collection="analytics.events"
+)
+```
+
+---
+
+### read_prdx()
+
+Reads a native PardoX (.prdx) file.
+
+<ParamField path="path" type="str" required>
+  Path to the .prdx file
+</ParamField>
+
+<ParamField path="limit" type="int" default="100">
+  Number of rows to inspect (head)
+</ParamField>
+
+<ResponseField name="return" type="list">
+  List of dictionaries containing the data rows
+</ResponseField>
+
+```python
+data = pdx.read_prdx("data.prdx", limit=500)
+```
+
+<Note>
+  Currently in V0.1 Beta Showcase Mode. Uses the Native Reader to inspect file structure and data integrity. Returns a list of dictionaries for preview purposes.
+</Note>
+
+---
+
+### from_arrow()
+
+Ingests an Apache Arrow Table or RecordBatch into PardoX using Zero-Copy.
+
+<ParamField path="data" type="pyarrow.Table | pyarrow.RecordBatch" required>
+  Arrow Table or RecordBatch to ingest
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  PardoX DataFrame
+</ResponseField>
+
+```python
+import pyarrow as pa
+import pardox as pdx
+
+# From Arrow Table
+arrow_table = pa.table({
+    "id": [1, 2, 3],
+    "name": ["Alice", "Bob", "Charlie"]
+})
+df = pdx.from_arrow(arrow_table)
+
+# From Parquet via Arrow
+import pyarrow.parquet as pq
+table = pq.read_table("data.parquet")
+df = pdx.from_arrow(table)
+```
+
+<Note>
+  Use this for sources not yet supported natively (e.g., Parquet, Snowflake via Arrow). Requires `pyarrow` installed.
+</Note>
+
+---
+
+## Execute Functions
+
+These functions execute DDL/DML statements directly via native Rust drivers without returning data.
+
+### execute_sql()
+
+Execute arbitrary DDL or DML directly against PostgreSQL via the Rust native driver.
+
+<ParamField path="connection_string" type="str" required>
+  PostgreSQL URL (e.g. "postgresql://user:pass@host/db")
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  SQL statement to execute (CREATE TABLE, DROP TABLE, UPDATE, DELETE, etc.)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of rows affected (0 for DDL statements)
+</ResponseField>
+
+```python
+# Create table
+pdx.execute_sql(
+    connection_string="postgresql://user:pass@localhost/db",
+    query="CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100))"
+)
+
+# Update data
+rows = pdx.execute_sql(
+    connection_string="postgresql://user:pass@localhost/db",
+    query="UPDATE users SET status = 'active' WHERE last_login > NOW() - INTERVAL '30 days'"
+)
+print(f"Updated {rows} rows")
+```
+
+---
+
+### execute_mysql()
+
+Execute arbitrary DDL or DML directly against MySQL via the Rust native driver.
+
+<ParamField path="connection_string" type="str" required>
+  MySQL URL
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  SQL statement to execute
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of rows affected
+</ResponseField>
+
+```python
+rows = pdx.execute_mysql(
+    connection_string="mysql://root:pass@localhost:3306/db",
+    query="DELETE FROM temp_data WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)"
+)
+```
+
+---
+
+### execute_sqlserver()
+
+Execute arbitrary DDL or DML directly against SQL Server via the Rust native driver.
+
+<ParamField path="connection_string" type="str" required>
+  ADO.NET connection string
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  SQL statement to execute
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of rows affected
+</ResponseField>
+
+```python
+rows = pdx.execute_sqlserver(
+    connection_string="Server=localhost;Database=mydb;User Id=sa;Password=pwd",
+    query="TRUNCATE TABLE staging_data"
+)
+```
+
+---
+
+### execute_mongodb()
+
+Execute a MongoDB command (e.g. drop, create, custom commands) via the Rust native driver.
+
+<ParamField path="connection_string" type="str" required>
+  MongoDB URI
+</ParamField>
+
+<ParamField path="database" type="str" required>
+  Target database name
+</ParamField>
+
+<ParamField path="command_json" type="str" required>
+  JSON string of the MongoDB command document (e.g. `'{"drop": "my_collection"}'`)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Value of the 'n' or 'ok' field from the command result
+</ResponseField>
+
+```python
+# Drop a collection
+result = pdx.execute_mongodb(
+    connection_string="mongodb://localhost:27017",
+    database="analytics",
+    command_json='{"drop": "temp_events"}'
+)
+
+# Create index
+result = pdx.execute_mongodb(
+    connection_string="mongodb://localhost:27017",
+    database="analytics",
+    command_json='{"createIndexes": "users", "indexes": [{"key": {"email": 1}, "name": "email_idx", "unique": true}]}'
+)
+```
+
+---
+
+## Configuration
+
+### DEFAULT_CSV_CONFIG
+
+Default configuration dictionary for the Rust CSV Reader:
+
+```python
+DEFAULT_CSV_CONFIG = {
+    "delimiter": 44,        # Comma (,)
+    "quote_char": 34,       # Double Quote (")
+    "has_header": True,
+    "chunk_size": 16 * 1024 * 1024  # 16MB Chunk
+}
+```
+
+<Note>
+  The chunk size of 16MB is optimized for high-performance streaming of large CSV files.
+</Note>

@@ -1,0 +1,712 @@
+---
+title: DataFrame
+description: The DataFrame class represents a tabular dataset with columnar operations powered by the Rust engine
+---
+
+## Overview
+
+The `DataFrame` class is the core data structure in PardoX for Node.js. It provides a high-performance interface for loading, transforming, and analyzing tabular data using the underlying Rust engine.
+
+## Constructor
+
+```javascript
+const df = new DataFrame(ptr)
+```
+
+<ParamField path="ptr" type="pointer" default="null">
+  Opaque koffi pointer to the HyperBlockManager (internal use only)
+</ParamField>
+
+<Note>
+  In most cases, you should not use the constructor directly. Instead, use factory methods like `read_csv()`, `read_sql()`, or `fromArray()`.
+</Note>
+
+## Properties
+
+### shape
+
+Returns the dimensions of the DataFrame as `[rows, columns]`.
+
+```javascript
+const df = DataFrame.read_csv('data.csv')
+const [rows, cols] = df.shape
+console.log(`DataFrame has ${rows} rows and ${cols} columns`)
+```
+
+**Returns:** `[number, number]`
+
+### columns
+
+Returns an array of column names.
+
+```javascript
+const df = DataFrame.read_csv('data.csv')
+console.log(df.columns)  // ['id', 'name', 'age', 'salary']
+```
+
+**Returns:** `string[]`
+
+### dtypes
+
+Returns an object mapping column names to their data types.
+
+```javascript
+const df = DataFrame.read_csv('data.csv')
+console.log(df.dtypes)  // { id: 'Int64', name: 'String', age: 'Int64', salary: 'Float64' }
+```
+
+**Returns:** `{ [column: string]: string }`
+
+## Factory Methods
+
+### read_csv()
+
+Load a CSV file using the Rust engine.
+
+```javascript
+const df = DataFrame.read_csv('data.csv')
+
+// With explicit schema
+const df2 = DataFrame.read_csv('data.csv', {
+  id: 'Int64',
+  name: 'String',
+  salary: 'Float64'
+})
+```
+
+<ParamField path="path" type="string" required>
+  Path to the CSV file
+</ParamField>
+
+<ParamField path="schema" type="object" default="null">
+  Optional manual schema definition: `{ colName: 'Int64', ... }`. Pass `null` for automatic type inference.
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### read_sql()
+
+Execute a PostgreSQL query via the Rust native driver.
+
+```javascript
+const df = DataFrame.read_sql(
+  'postgresql://user:pass@localhost:5432/mydb',
+  'SELECT * FROM users WHERE active = true'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  PostgreSQL connection URL
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### read_mysql()
+
+Execute a MySQL query via the Rust native driver.
+
+```javascript
+const df = DataFrame.read_mysql(
+  'mysql://user:pass@localhost:3306/mydb',
+  'SELECT * FROM orders'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  MySQL URL (e.g., `mysql://user:pass@host:3306/db`)
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### read_sqlserver()
+
+Execute a SQL Server query via the Rust native driver (tiberius).
+
+```javascript
+const df = DataFrame.read_sqlserver(
+  'Server=localhost;Database=mydb;User Id=sa;Password=pass;',
+  'SELECT * FROM customers'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  ADO.NET connection string
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### read_mongodb()
+
+Read a MongoDB collection via the Rust native driver.
+
+```javascript
+const df = DataFrame.read_mongodb(
+  'mongodb://user:pass@localhost:27017',
+  'mydb.users'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  MongoDB URI (e.g., `mongodb://user:pass@host:27017`)
+</ParamField>
+
+<ParamField path="dbDotCollection" type="string" required>
+  Target as `database.collection` (e.g., `mydb.orders`)
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### fromArray()
+
+Create a DataFrame from an array of plain JavaScript objects.
+
+```javascript
+const data = [
+  { id: 1, name: 'Alice', age: 30 },
+  { id: 2, name: 'Bob', age: 25 },
+  { id: 3, name: 'Charlie', age: 35 }
+]
+const df = DataFrame.fromArray(data)
+```
+
+<ParamField path="data" type="Object[]" required>
+  Array of row objects (non-empty)
+</ParamField>
+
+**Returns:** `DataFrame`
+
+## Inspection & Visualization
+
+### head()
+
+Return a new DataFrame with the first N rows.
+
+```javascript
+const first5 = df.head(5)
+first5.show()
+```
+
+<ParamField path="n" type="number" default="5">
+  Number of rows to return
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### tail()
+
+Return a new DataFrame with the last N rows.
+
+```javascript
+const last10 = df.tail(10)
+last10.show()
+```
+
+<ParamField path="n" type="number" default="5">
+  Number of rows to return
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### show()
+
+Print N rows as an ASCII table to stdout.
+
+```javascript
+df.show(10)
+```
+
+<ParamField path="n" type="number" default="10">
+  Number of rows to display
+</ParamField>
+
+**Returns:** `void`
+
+### toJson()
+
+Serialize ALL rows as a JSON string (records format).
+
+```javascript
+const json = df.toJson()
+console.log(json)  // '[{"id":1,"name":"Alice"},{...}]'
+```
+
+**Returns:** `string`
+
+### toDict()
+
+Returns ALL rows as an array of objects (records format). Equivalent to Pandas' `df.to_dict('records')`.
+
+```javascript
+const records = df.toDict()
+console.log(records)  // [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
+```
+
+**Returns:** `Object[]`
+
+### toList()
+
+Returns ALL rows as an array of arrays (values format). Equivalent to Pandas' `df.values.tolist()`.
+
+```javascript
+const values = df.toList()
+console.log(values)  // [[1, 'Alice', 30], [2, 'Bob', 25]]
+```
+
+**Returns:** `Array[]`
+
+### iloc()
+
+Return a slice (new DataFrame) by row positions `[start, end)`.
+
+```javascript
+const slice = df.iloc(10, 20)  // rows 10-19
+```
+
+<ParamField path="start" type="number" required>
+  Starting row index (inclusive)
+</ParamField>
+
+<ParamField path="end" type="number" required>
+  Ending row index (exclusive)
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### valueCounts()
+
+Returns the frequency of each unique value in the given column.
+
+```javascript
+const counts = df.valueCounts('country')
+console.log(counts)  // { 'USA': 150, 'UK': 75, 'Canada': 50 }
+```
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+**Returns:** `Object` - `{ "value": count, ... }` sorted by count descending
+
+### unique()
+
+Returns the unique values of the given column in insertion order.
+
+```javascript
+const countries = df.unique('country')
+console.log(countries)  // ['USA', 'UK', 'Canada']
+```
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+**Returns:** `Array`
+
+## Mutation & Transformation
+
+### cast()
+
+Cast a column to a new type in-place. Returns `this` for chaining.
+
+```javascript
+df.cast('age', 'Float64')
+  .cast('id', 'String')
+```
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+<ParamField path="targetType" type="string" required>
+  Target data type (e.g., `'Int64'`, `'Float64'`, `'String'`)
+</ParamField>
+
+**Returns:** `DataFrame` (this)
+
+### join()
+
+Hash-join with another DataFrame.
+
+```javascript
+// Join on same column name
+const result = df1.join(df2, { on: 'user_id' })
+
+// Join on different column names
+const result2 = df1.join(df2, { leftOn: 'id', rightOn: 'user_id' })
+```
+
+<ParamField path="other" type="DataFrame" required>
+  DataFrame to join with
+</ParamField>
+
+<ParamField path="options" type="object">
+  Join options:
+  - `on`: Key column (same name on both sides)
+  - `leftOn`: Left key column
+  - `rightOn`: Right key column
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### filter()
+
+Apply a boolean Series as a row filter.
+
+```javascript
+const mask = df['age'].gt(25)
+const filtered = df.filter(mask)
+```
+
+<ParamField path="mask" type="Series" required>
+  Boolean Series produced by a comparison operation
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### fillna()
+
+Fill null/NaN in all numeric columns. Returns `this` for chaining.
+
+```javascript
+df.fillna(0)  // Replace all nulls with 0
+```
+
+<ParamField path="val" type="number" required>
+  Fill value
+</ParamField>
+
+**Returns:** `DataFrame` (this)
+
+### round()
+
+Round all numeric columns to N decimal places. Returns `this` for chaining.
+
+```javascript
+df.round(2)  // Round to 2 decimal places
+```
+
+<ParamField path="decimals" type="number" default="0">
+  Number of decimal places
+</ParamField>
+
+**Returns:** `DataFrame` (this)
+
+### sortValues()
+
+Sort rows by the named column.
+
+```javascript
+// Ascending sort
+const sorted = df.sortValues('age')
+
+// Descending sort
+const sorted2 = df.sortValues('salary', false)
+
+// GPU-accelerated sort (falls back to CPU if unavailable)
+const sorted3 = df.sortValues('age', true, true)
+```
+
+<ParamField path="by" type="string" required>
+  Column name to sort by
+</ParamField>
+
+<ParamField path="ascending" type="boolean" default="true">
+  Sort order (true for ascending, false for descending)
+</ParamField>
+
+<ParamField path="gpu" type="boolean" default="false">
+  Use GPU Bitonic sort pipeline (falls back to CPU if unavailable)
+</ParamField>
+
+**Returns:** `DataFrame`
+
+## Math Operations
+
+### add()
+
+Columnar addition: `col_a + col_b` → new DataFrame with `"result_math_add"`.
+
+```javascript
+const result = df.add('price', 'tax')
+```
+
+<ParamField path="colA" type="string" required>
+  First column name
+</ParamField>
+
+<ParamField path="colB" type="string" required>
+  Second column name
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### sub()
+
+Columnar subtraction: `col_a - col_b` → new DataFrame with `"result_math_sub"`.
+
+```javascript
+const result = df.sub('revenue', 'cost')
+```
+
+<ParamField path="colA" type="string" required>
+  First column name
+</ParamField>
+
+<ParamField path="colB" type="string" required>
+  Second column name
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### mul()
+
+Columnar multiplication: `col_a * col_b` → new DataFrame with `"result_mul"`.
+
+```javascript
+const result = df.mul('quantity', 'price')
+```
+
+<ParamField path="colA" type="string" required>
+  First column name
+</ParamField>
+
+<ParamField path="colB" type="string" required>
+  Second column name
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### std()
+
+Native sample standard deviation of a column.
+
+```javascript
+const stdDev = df.std('salary')
+console.log(`Standard deviation: ${stdDev}`)
+```
+
+<ParamField path="col" type="string" required>
+  Column name
+</ParamField>
+
+**Returns:** `number`
+
+### minMaxScale()
+
+Min-Max Scaler: normalizes column values to [0, 1]. Returns new DataFrame with column `"result_minmax"`.
+
+```javascript
+const normalized = df.minMaxScale('salary')
+```
+
+<ParamField path="col" type="string" required>
+  Column name to normalize
+</ParamField>
+
+**Returns:** `DataFrame`
+
+## Writers
+
+### toCsv()
+
+Export to CSV.
+
+```javascript
+df.toCsv('output.csv')
+```
+
+<ParamField path="path" type="string" required>
+  Output file path
+</ParamField>
+
+**Returns:** `boolean`
+
+### toPrdx()
+
+Export to native PardoX binary format (.prdx).
+
+```javascript
+df.toPrdx('data.prdx')
+```
+
+<ParamField path="path" type="string" required>
+  Output file path
+</ParamField>
+
+**Returns:** `boolean`
+
+### toSql()
+
+Write to a PostgreSQL table.
+
+```javascript
+// Append mode
+const rows = df.toSql(
+  'postgresql://user:pass@localhost:5432/mydb',
+  'users'
+)
+
+// Upsert mode with conflict columns
+const rows2 = df.toSql(
+  'postgresql://user:pass@localhost:5432/mydb',
+  'users',
+  'upsert',
+  ['id']
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  PostgreSQL connection URL
+</ParamField>
+
+<ParamField path="tableName" type="string" required>
+  Target table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="'append'">
+  Write mode: `'append'` or `'upsert'`
+</ParamField>
+
+<ParamField path="conflictCols" type="string[]" default="[]">
+  Columns for ON CONFLICT clause (used in upsert mode)
+</ParamField>
+
+**Returns:** `number` - Rows written
+
+### toMysql()
+
+Write to a MySQL table.
+
+```javascript
+const rows = df.toMysql(
+  'mysql://user:pass@localhost:3306/mydb',
+  'orders',
+  'append'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  MySQL URL (e.g., `mysql://user:pass@host:3306/db`)
+</ParamField>
+
+<ParamField path="tableName" type="string" required>
+  Target table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="'append'">
+  Write mode: `'append'`, `'replace'`, or `'upsert'`
+</ParamField>
+
+<ParamField path="conflictCols" type="string[]" default="[]">
+  Columns for ON DUPLICATE KEY UPDATE clause
+</ParamField>
+
+**Returns:** `number` - Rows written
+
+### toSqlserver()
+
+Write to a SQL Server table.
+
+```javascript
+const rows = df.toSqlserver(
+  'Server=localhost;Database=mydb;User Id=sa;Password=pass;',
+  'customers',
+  'append'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  ADO.NET connection string
+</ParamField>
+
+<ParamField path="tableName" type="string" required>
+  Target table name
+</ParamField>
+
+<ParamField path="mode" type="string" default="'append'">
+  Write mode: `'append'`, `'replace'`, or `'upsert'`
+</ParamField>
+
+<ParamField path="conflictCols" type="string[]" default="[]">
+  Columns for MERGE ON clause
+</ParamField>
+
+**Returns:** `number` - Rows written
+
+### toMongodb()
+
+Write to a MongoDB collection.
+
+```javascript
+const rows = df.toMongodb(
+  'mongodb://user:pass@localhost:27017',
+  'mydb.users',
+  'append'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  MongoDB URI (e.g., `mongodb://user:pass@host:27017`)
+</ParamField>
+
+<ParamField path="dbDotCollection" type="string" required>
+  Target as `database.collection`
+</ParamField>
+
+<ParamField path="mode" type="string" default="'append'">
+  Write mode: `'append'` or `'replace'`
+</ParamField>
+
+**Returns:** `number` - Rows written
+
+## Column Access
+
+### Subscript Syntax
+
+Access columns using bracket notation (returns a Series):
+
+```javascript
+const ageSeries = df['age']
+console.log(ageSeries.mean())
+
+// Column assignment
+df['total'] = df['price'].mul(df['quantity'])
+```
+
+## Example Workflow
+
+```javascript
+const { DataFrame } = require('@pardox/pardox')
+
+// Load CSV data
+const df = DataFrame.read_csv('sales.csv')
+
+// Inspect data
+console.log(df.shape)
+df.show(10)
+
+// Filter and transform
+const mask = df['quantity'].gt(100)
+const filtered = df.filter(mask)
+
+// Add calculated column
+filtered['revenue'] = filtered['price'].mul(filtered['quantity'])
+
+// Sort and export
+const sorted = filtered.sortValues('revenue', false)
+sorted.toCsv('high_revenue_sales.csv')
+
+console.log(`Exported ${sorted.shape[0]} rows`)
+```

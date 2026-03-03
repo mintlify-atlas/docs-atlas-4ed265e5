@@ -1,0 +1,430 @@
+---
+title: I/O Functions
+description: Static reader and writer functions for loading and exporting data
+---
+
+## Overview
+
+The `io` module provides static functions for reading data from various sources into DataFrames, as well as executing commands against databases.
+
+```javascript
+const { read_csv, read_sql, executeSql } = require('@pardox/pardox')
+```
+
+<Note>
+  All I/O operations bypass Node.js and run directly in the Rust engine for maximum performance.
+</Note>
+
+## CSV Operations
+
+### read_csv()
+
+Read a CSV file into a PardoX DataFrame using the native Rust engine.
+
+```javascript
+const { read_csv } = require('@pardox/pardox')
+
+// Auto-detect types
+const df = read_csv('data.csv')
+
+// With explicit schema
+const df2 = read_csv('data.csv', {
+  id: 'Int64',
+  name: 'String',
+  price: 'Float64',
+  quantity: 'Int64'
+})
+```
+
+<ParamField path="path" type="string" required>
+  Path to the CSV file
+</ParamField>
+
+<ParamField path="schema" type="object" default="null">
+  Optional manual schema definition: `{ colName: 'Int64', ... }`. Pass `null` for automatic type inference.
+</ParamField>
+
+**Returns:** `DataFrame`
+
+**Configuration:**
+
+The default CSV configuration is:
+- Delimiter: `,` (comma, ASCII 44)
+- Quote character: `"` (double-quote, ASCII 34)
+- Has header: `true`
+- Chunk size: 16 MB
+
+## PostgreSQL Operations
+
+### read_sql()
+
+Execute a SQL query via the Rust native driver and return the results.
+
+```javascript
+const { read_sql } = require('@pardox/pardox')
+
+const df = read_sql(
+  'postgresql://user:password@localhost:5432/mydb',
+  'SELECT * FROM users WHERE active = true'
+)
+
+df.show()
+```
+
+<ParamField path="connectionString" type="string" required>
+  PostgreSQL connection URL
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### executeSql()
+
+Execute arbitrary DDL or DML directly via the Rust native driver.
+
+```javascript
+const { executeSql } = require('@pardox/pardox')
+
+// Create table
+executeSql(
+  'postgresql://user:password@localhost:5432/mydb',
+  'CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100))'
+)
+
+// Update data
+const rowsAffected = executeSql(
+  'postgresql://user:password@localhost:5432/mydb',
+  'UPDATE users SET active = true WHERE last_login > NOW() - INTERVAL \'30 days\''
+)
+
+console.log(`Updated ${rowsAffected} rows`)
+```
+
+<ParamField path="connectionString" type="string" required>
+  PostgreSQL connection URL
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL statement to execute (DDL or DML)
+</ParamField>
+
+**Returns:** `number` - Number of rows affected (0 for DDL statements)
+
+## MySQL Operations
+
+### read_mysql()
+
+Read a MySQL table/query into a PardoX DataFrame using the native Rust driver.
+
+```javascript
+const { read_mysql } = require('@pardox/pardox')
+
+const df = read_mysql(
+  'mysql://user:password@localhost:3306/mydb',
+  'SELECT * FROM orders WHERE status = "pending"'
+)
+
+df.show()
+```
+
+<ParamField path="connectionString" type="string" required>
+  MySQL URL (e.g., `mysql://user:pass@host:3306/db`)
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### execute_mysql()
+
+Execute arbitrary DDL or DML directly against MySQL via the Rust native driver.
+
+```javascript
+const { execute_mysql } = require('@pardox/pardox')
+
+// Create table
+execute_mysql(
+  'mysql://user:password@localhost:3306/mydb',
+  'CREATE TABLE products (id INT PRIMARY KEY AUTO_INCREMENT, name VARCHAR(255))'
+)
+
+// Delete old records
+const deleted = execute_mysql(
+  'mysql://user:password@localhost:3306/mydb',
+  'DELETE FROM logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)'
+)
+
+console.log(`Deleted ${deleted} rows`)
+```
+
+<ParamField path="connectionString" type="string" required>
+  MySQL URL
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL statement to execute
+</ParamField>
+
+**Returns:** `number` - Number of rows affected
+
+## SQL Server Operations
+
+### read_sqlserver()
+
+Read from SQL Server into a PardoX DataFrame using the native Rust driver (tiberius).
+
+```javascript
+const { read_sqlserver } = require('@pardox/pardox')
+
+const df = read_sqlserver(
+  'Server=localhost;Database=mydb;User Id=sa;Password=YourPass123;',
+  'SELECT * FROM customers WHERE country = \'USA\''
+)
+
+df.show()
+```
+
+<ParamField path="connectionString" type="string" required>
+  ADO.NET connection string
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL query to execute
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### execute_sqlserver()
+
+Execute arbitrary DDL or DML directly against SQL Server via the Rust native driver.
+
+```javascript
+const { execute_sqlserver } = require('@pardox/pardox')
+
+// Create table
+execute_sqlserver(
+  'Server=localhost;Database=mydb;User Id=sa;Password=YourPass123;',
+  'CREATE TABLE inventory (id INT PRIMARY KEY, product_name NVARCHAR(255))'
+)
+
+// Update records
+const updated = execute_sqlserver(
+  'Server=localhost;Database=mydb;User Id=sa;Password=YourPass123;',
+  'UPDATE inventory SET stock = 0 WHERE discontinued = 1'
+)
+
+console.log(`Updated ${updated} rows`)
+```
+
+<ParamField path="connectionString" type="string" required>
+  ADO.NET connection string
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  SQL statement to execute
+</ParamField>
+
+**Returns:** `number` - Number of rows affected
+
+## MongoDB Operations
+
+### read_mongodb()
+
+Read a MongoDB collection into a PardoX DataFrame using the native Rust driver.
+
+```javascript
+const { read_mongodb } = require('@pardox/pardox')
+
+const df = read_mongodb(
+  'mongodb://user:password@localhost:27017',
+  'mydb.users'
+)
+
+df.show()
+```
+
+<ParamField path="connectionString" type="string" required>
+  MongoDB URI (e.g., `mongodb://user:pass@host:27017`)
+</ParamField>
+
+<ParamField path="dbDotCollection" type="string" required>
+  Target as `database.collection` (e.g., `mydb.orders`)
+</ParamField>
+
+**Returns:** `DataFrame`
+
+### execute_mongodb()
+
+Execute a MongoDB command via the Rust native driver.
+
+```javascript
+const { execute_mongodb } = require('@pardox/pardox')
+
+// Drop collection
+const result = execute_mongodb(
+  'mongodb://user:password@localhost:27017',
+  'mydb',
+  '{"drop": "old_collection"}'
+)
+
+console.log(`Command result: ${result}`)
+
+// Create index
+execute_mongodb(
+  'mongodb://user:password@localhost:27017',
+  'mydb',
+  '{"createIndexes": "users", "indexes": [{"key": {"email": 1}, "name": "email_idx", "unique": true}]}'
+)
+```
+
+<ParamField path="connectionString" type="string" required>
+  MongoDB URI
+</ParamField>
+
+<ParamField path="database" type="string" required>
+  Target database name
+</ParamField>
+
+<ParamField path="commandJson" type="string" required>
+  JSON string of the MongoDB command document (e.g., `'{"drop":"my_collection"}'`)
+</ParamField>
+
+**Returns:** `number` - Value of the 'n' or 'ok' field from the result
+
+## PardoX Binary Format
+
+### read_prdx()
+
+Read a native PardoX (.prdx) file and return a preview as a JavaScript array.
+
+```javascript
+const { read_prdx } = require('@pardox/pardox')
+
+// Read first 100 rows
+const preview = read_prdx('data.prdx', 100)
+console.log(preview)
+
+// Read first 1000 rows
+const larger = read_prdx('data.prdx', 1000)
+```
+
+<ParamField path="path" type="string" required>
+  Path to the .prdx file
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of rows to read
+</ParamField>
+
+**Returns:** `Object[]` - Array of row objects
+
+<Note>
+  This function returns a JavaScript array preview, not a DataFrame. To work with the full dataset as a DataFrame, use the native Rust loader.
+</Note>
+
+## Example Workflows
+
+### Multi-Database ETL Pipeline
+
+```javascript
+const { 
+  read_mysql, 
+  read_sql, 
+  executeSql 
+} = require('@pardox/pardox')
+
+// Extract from MySQL
+const orders = read_mysql(
+  'mysql://user:pass@mysql-host:3306/sales',
+  'SELECT * FROM orders WHERE created_at > CURDATE() - INTERVAL 7 DAY'
+)
+
+console.log(`Loaded ${orders.shape[0]} orders from MySQL`)
+
+// Transform
+const mask = orders['status'].eq('completed')
+const completed = orders.filter(mask)
+
+// Load to PostgreSQL
+const rows = completed.toSql(
+  'postgresql://user:pass@pg-host:5432/analytics',
+  'weekly_orders',
+  'append'
+)
+
+console.log(`Inserted ${rows} rows into PostgreSQL`)
+```
+
+### Database Initialization
+
+```javascript
+const { executeSql, read_csv } = require('@pardox/pardox')
+
+const connStr = 'postgresql://user:pass@localhost:5432/mydb'
+
+// Create table
+executeSql(connStr, `
+  CREATE TABLE IF NOT EXISTS employees (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    department VARCHAR(50),
+    salary DECIMAL(10, 2)
+  )
+`)
+
+// Load initial data from CSV
+const df = read_csv('employees.csv')
+const inserted = df.toSql(connStr, 'employees', 'append')
+
+console.log(`Initialized database with ${inserted} employees`)
+```
+
+### MongoDB to SQL Migration
+
+```javascript
+const { read_mongodb, executeSql } = require('@pardox/pardox')
+
+// Read from MongoDB
+const users = read_mongodb(
+  'mongodb://localhost:27017',
+  'app.users'
+)
+
+console.log(`Loaded ${users.shape[0]} users from MongoDB`)
+
+// Create PostgreSQL table
+const pgConn = 'postgresql://user:pass@localhost:5432/newdb'
+executeSql(pgConn, `
+  CREATE TABLE users (
+    id VARCHAR(50) PRIMARY KEY,
+    email VARCHAR(255),
+    created_at TIMESTAMP
+  )
+`)
+
+// Migrate data
+const migrated = users.toSql(pgConn, 'users', 'append')
+console.log(`Migrated ${migrated} users to PostgreSQL`)
+```
+
+### Working with PRDX Files
+
+```javascript
+const { read_csv, read_prdx } = require('@pardox/pardox')
+const { DataFrame } = require('@pardox/pardox')
+
+// Convert CSV to PRDX for faster subsequent loads
+const df = read_csv('large_dataset.csv')
+df.toPrdx('large_dataset.prdx')
+
+console.log('Converted to PRDX format')
+
+// Preview the PRDX file
+const preview = read_prdx('large_dataset.prdx', 50)
+console.log('First 50 rows:', preview)
+```

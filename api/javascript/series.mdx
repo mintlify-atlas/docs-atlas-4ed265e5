@@ -1,0 +1,459 @@
+---
+title: Series
+description: The Series class represents a single column view into a DataFrame with vectorized operations
+---
+
+## Overview
+
+The `Series` class represents a single column view into a DataFrame. It provides arithmetic, comparison, and aggregation operations that delegate to the Rust engine via FFI.
+
+<Note>
+  Series does NOT own the Rust memory; the parent DataFrame manages the HyperBlockManager pointer lifecycle.
+</Note>
+
+## Constructor
+
+```javascript
+const series = new Series(df, 'column_name')
+```
+
+<ParamField path="df" type="DataFrame" required>
+  Parent DataFrame
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Column name
+</ParamField>
+
+<Note>
+  You typically don't construct Series directly. Instead, access columns via DataFrame subscript syntax: `df['column_name']`
+</Note>
+
+## Properties
+
+### dtype
+
+Returns the data type of the column.
+
+```javascript
+const ageType = df['age'].dtype
+console.log(ageType)  // 'Int64'
+```
+
+**Returns:** `string`
+
+### name
+
+Returns the column name.
+
+```javascript
+const series = df['salary']
+console.log(series.name)  // 'salary'
+```
+
+**Returns:** `string`
+
+## Inspection & Visualization
+
+### head()
+
+Return a new Series containing the first N rows.
+
+```javascript
+const first5 = df['age'].head(5)
+first5.show()
+```
+
+<ParamField path="n" type="number" default="5">
+  Number of rows to return
+</ParamField>
+
+**Returns:** `Series`
+
+### tail()
+
+Return a new Series containing the last N rows.
+
+```javascript
+const last10 = df['salary'].tail(10)
+last10.show()
+```
+
+<ParamField path="n" type="number" default="5">
+  Number of rows to return
+</ParamField>
+
+**Returns:** `Series`
+
+### show()
+
+Print the parent DataFrame's ASCII table.
+
+```javascript
+df['age'].show(10)
+```
+
+<ParamField path="n" type="number" default="10">
+  Number of rows to display
+</ParamField>
+
+**Returns:** `void`
+
+## Arithmetic Operations
+
+All arithmetic operations return a new Series.
+
+### add()
+
+Element-wise addition.
+
+```javascript
+const total = df['base_price'].add(df['tax'])
+df['total_price'] = total
+```
+
+<ParamField path="other" type="Series" required>
+  Series to add (must have same length)
+</ParamField>
+
+**Returns:** `Series`
+
+### sub()
+
+Element-wise subtraction.
+
+```javascript
+const profit = df['revenue'].sub(df['cost'])
+df['profit'] = profit
+```
+
+<ParamField path="other" type="Series" required>
+  Series to subtract (must have same length)
+</ParamField>
+
+**Returns:** `Series`
+
+### mul()
+
+Element-wise multiplication.
+
+```javascript
+const total = df['price'].mul(df['quantity'])
+df['total'] = total
+```
+
+<ParamField path="other" type="Series" required>
+  Series to multiply (must have same length)
+</ParamField>
+
+**Returns:** `Series`
+
+### div()
+
+Element-wise division.
+
+```javascript
+const avgPrice = df['total_revenue'].div(df['quantity'])
+df['avg_price'] = avgPrice
+```
+
+<ParamField path="other" type="Series" required>
+  Series to divide by (must have same length)
+</ParamField>
+
+**Returns:** `Series`
+
+### mod()
+
+Element-wise modulo.
+
+```javascript
+const remainder = df['value'].mod(df['divisor'])
+df['remainder'] = remainder
+```
+
+<ParamField path="other" type="Series" required>
+  Series for modulo operation (must have same length)
+</ParamField>
+
+**Returns:** `Series`
+
+## Comparison Operations
+
+All comparison operations return a Boolean Series that can be used as a filter mask.
+
+### eq()
+
+Equal (`==`) comparison.
+
+```javascript
+// Compare with another Series
+const mask = df['status'].eq(df['expected_status'])
+
+// Compare with scalar
+const mask2 = df['age'].eq(25)
+```
+
+<ParamField path="other" type="Series | number" required>
+  Series or scalar value to compare
+</ParamField>
+
+**Returns:** `Series` (Boolean)
+
+### neq()
+
+Not equal (`!=`) comparison.
+
+```javascript
+const mask = df['status'].neq('inactive')
+const active = df.filter(mask)
+```
+
+<ParamField path="other" type="Series | number" required>
+  Series or scalar value to compare
+</ParamField>
+
+**Returns:** `Series` (Boolean)
+
+### gt()
+
+Greater than (`>`) comparison.
+
+```javascript
+const mask = df['age'].gt(18)
+const adults = df.filter(mask)
+```
+
+<ParamField path="other" type="Series | number" required>
+  Series or scalar value to compare
+</ParamField>
+
+**Returns:** `Series` (Boolean)
+
+### gte()
+
+Greater than or equal (`>=`) comparison.
+
+```javascript
+const mask = df['salary'].gte(50000)
+const highEarners = df.filter(mask)
+```
+
+<ParamField path="other" type="Series | number" required>
+  Series or scalar value to compare
+</ParamField>
+
+**Returns:** `Series` (Boolean)
+
+### lt()
+
+Less than (`<`) comparison.
+
+```javascript
+const mask = df['stock'].lt(10)
+const lowStock = df.filter(mask)
+```
+
+<ParamField path="other" type="Series | number" required>
+  Series or scalar value to compare
+</ParamField>
+
+**Returns:** `Series` (Boolean)
+
+### lte()
+
+Less than or equal (`<=`) comparison.
+
+```javascript
+const mask = df['age'].lte(65)
+const underRetirement = df.filter(mask)
+```
+
+<ParamField path="other" type="Series | number" required>
+  Series or scalar value to compare
+</ParamField>
+
+**Returns:** `Series` (Boolean)
+
+## Aggregations
+
+All aggregation methods return a single scalar value.
+
+### sum()
+
+Compute the sum of all values.
+
+```javascript
+const totalRevenue = df['revenue'].sum()
+console.log(`Total: $${totalRevenue}`)
+```
+
+**Returns:** `number`
+
+### mean()
+
+Compute the arithmetic mean.
+
+```javascript
+const avgAge = df['age'].mean()
+console.log(`Average age: ${avgAge}`)
+```
+
+**Returns:** `number`
+
+### min()
+
+Find the minimum value.
+
+```javascript
+const minPrice = df['price'].min()
+console.log(`Lowest price: $${minPrice}`)
+```
+
+**Returns:** `number`
+
+### max()
+
+Find the maximum value.
+
+```javascript
+const maxSalary = df['salary'].max()
+console.log(`Highest salary: $${maxSalary}`)
+```
+
+**Returns:** `number`
+
+### count()
+
+Count the number of non-null values.
+
+```javascript
+const validEntries = df['email'].count()
+console.log(`Valid emails: ${validEntries}`)
+```
+
+**Returns:** `number`
+
+### std()
+
+Compute the sample standard deviation.
+
+```javascript
+const stdDev = df['test_scores'].std()
+console.log(`Standard deviation: ${stdDev}`)
+```
+
+**Returns:** `number`
+
+## Cleaning
+
+### fillna()
+
+Fill null/NaN values with a specified value.
+
+```javascript
+df['age'].fillna(0)
+```
+
+<ParamField path="val" type="number" required>
+  Fill value
+</ParamField>
+
+**Returns:** `Series` (this)
+
+### round()
+
+Round numeric values to specified decimal places.
+
+```javascript
+df['price'].round(2)  // Round to 2 decimal places
+```
+
+<ParamField path="decimals" type="number" required>
+  Number of decimal places
+</ParamField>
+
+**Returns:** `Series` (this)
+
+<Note>
+  The column must be numeric for `round()` to work. An error will be thrown for non-numeric columns.
+</Note>
+
+## Example Workflows
+
+### Filtering with Comparison
+
+```javascript
+const { DataFrame } = require('@pardox/pardox')
+
+const df = DataFrame.read_csv('employees.csv')
+
+// Filter employees with salary > 50000
+const mask = df['salary'].gt(50000)
+const highEarners = df.filter(mask)
+
+highEarners.show()
+```
+
+### Arithmetic Operations
+
+```javascript
+const df = DataFrame.read_csv('sales.csv')
+
+// Calculate total price
+const total = df['price'].mul(df['quantity'])
+df['total_price'] = total
+
+// Calculate profit
+const profit = df['revenue'].sub(df['cost'])
+df['profit'] = profit
+
+df.show(10)
+```
+
+### Aggregation Pipeline
+
+```javascript
+const df = DataFrame.read_csv('orders.csv')
+
+// Get statistics
+const stats = {
+  totalOrders: df['order_id'].count(),
+  totalRevenue: df['amount'].sum(),
+  avgOrderValue: df['amount'].mean(),
+  minOrder: df['amount'].min(),
+  maxOrder: df['amount'].max(),
+  stdDev: df['amount'].std()
+}
+
+console.log(stats)
+```
+
+### Chaining Operations
+
+```javascript
+const df = DataFrame.read_csv('data.csv')
+
+// Fill nulls, round, and get statistics
+const avgPrice = df['price']
+  .fillna(0)
+  .round(2)
+  .mean()
+
+console.log(`Average price: $${avgPrice.toFixed(2)}`)
+```
+
+### Complex Filtering
+
+```javascript
+const df = DataFrame.read_csv('products.csv')
+
+// Multiple conditions (requires multiple filter calls)
+const highPrice = df['price'].gt(100)
+const expensive = df.filter(highPrice)
+
+const lowStock = expensive['stock'].lt(10)
+const needsRestock = expensive.filter(lowStock)
+
+needsRestock.show()
+```

@@ -1,0 +1,407 @@
+---
+title: 'Aggregations & Analytics'
+description: 'Compute statistics, export data, and analyze distributions with high-performance aggregation kernels'
+---
+
+PardoX provides two layers of data insight:
+
+1. **Aggregation kernels** — reduce a column to a scalar (sum, mean, std, etc.)
+2. **The Observer** — export and inspect the full DataFrame (value_counts, unique, to_dict, to_json)
+
+All operations run entirely in native Rust machine code.
+
+## Column Aggregations
+
+Access aggregation methods directly on any numeric `Series` object (obtained via `df['col']`).
+
+### Sum
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    total_revenue = df['amount'].sum()
+    print(f"Total: ${total_revenue:,.2f}")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const col = df.amount;
+    const total = col.sum();
+    console.log(`Total: $${total}`);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $col = $df["amount"];
+    $total = $col->sum();
+    echo "Total: $$total\n";
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `float`
+
+### Mean
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    avg_ticket = df['amount'].mean()
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const average = df.score.mean();
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $average = $df["score"]->mean();
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `float`
+
+### Min / Max
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    highest = df['amount'].max()
+    lowest  = df['amount'].min()
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const maximum = df.score.max();
+    const minimum = df.score.min();
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $maximum = $df["score"]->max();
+    $minimum = $df["score"]->min();
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `float`
+
+### Standard Deviation
+
+Sample standard deviation.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    volatility = df['amount'].std()
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const stdDev = df.score.std();
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $stdDev = $df["score"]->std();
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `float`
+
+<Info>
+  **Interpretation** - Low std → values cluster near the mean. High std → values are widely spread.
+</Info>
+
+### Count
+
+Number of non-null values in the column.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    valid_transactions = df['transaction_id'].count()
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const count = df.transaction_id.count();
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $count = $df["transaction_id"]->count();
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `int`
+
+## DataFrame-Level Standard Deviation
+
+`df.std(col)` is a DataFrame method (distinct from the Series `.std()`) that computes the sample standard deviation for a named column and returns a Python float.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    revenue_df = df.mul("price", "quantity")
+    std_val    = revenue_df.std("result_mul")
+    print(f"Revenue std dev: {std_val:,.4f}")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const stdValue = df.std('score');
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $stdValue = $df->std("score");
+    ```
+  </Tab>
+</Tabs>
+
+## Null Value Handling
+
+All aggregation functions are **null-aware**: they skip `NaN` / null values and compute metrics only over valid data points. This matches SQL and Pandas behavior.
+
+To fill nulls before aggregation:
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    df.fillna(0.0)
+    total = df['amount'].sum()
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    df.fillna(0.0);
+    const total = df.amount.sum();
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $df->fillna(0.0);
+    $total = $df["amount"]->sum();
+    ```
+  </Tab>
+</Tabs>
+
+## Performance
+
+| Method | Mechanism | Speed (10M rows) |
+|--------|-----------|------------------|
+| Python `sum(list)` | Iterates `PyObject` one by one | ~1.5s |
+| PardoX `.sum()` | SIMD vectorized accumulator | ~0.02s |
+
+<Tip>
+  **Under the hood** - `.sum()` passes the memory pointer directly to a Rust function. AVX2 instructions add 4–8 values per CPU cycle without ever materializing Python objects.
+</Tip>
+
+## The Observer — Full DataFrame Export
+
+The Observer module provides functions to export or inspect the entire DataFrame. All string results are **heap-allocated** (proper ownership) and freed after the Python string is created.
+
+### to_dict()
+
+Returns all rows as a list of dictionaries (records format). Equivalent to Pandas' `df.to_dict('records')`.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    records = df.to_dict()
+    # [{'price': 19.99, 'quantity': 3, ...}, ...]
+
+    print(f"Total records: {len(records)}")
+    first_row = records[0]
+    print(first_row['price'])
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const arr = df.toDict();
+    // [{ name: 'Alice', age: 30 }, ...]
+    console.log(`Records: ${arr.length}`);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $arr = $df->to_dict();
+    // [["name"=>"Alice", "age"=>30], ...]
+    echo count($arr) . " records\n";
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `list[dict]`
+
+### to_json()
+
+Returns all rows as a JSON string `"[{...}, ...]"`. Useful for API responses or file writing.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    json_str = df.to_json()
+    with open("output.json", "w") as f:
+        f.write(json_str)
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const json = df.toJson();
+    fs.writeFileSync('./output.json', json);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $json = $df->to_json();
+    file_put_contents("output.json", $json);
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `str`
+
+### value_counts()
+
+Returns the frequency of each unique value in a column, sorted by count descending.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    state_counts = df.value_counts("state")
+    # {'TX': 6345, 'CA': 6301, 'CO': 6304, ...}
+
+    print(f"Unique states: {len(state_counts)}")
+
+    # Top 5
+    for state, count in list(state_counts.items())[:5]:
+        print(f"  {state}: {count:,}")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const stateCounts = df.valueCounts('state');
+    console.log(`States: ${Object.keys(stateCounts).length}`);
+
+    // { Electronics: 150, Clothing: 100, ... }
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $stateCounts = $df->value_counts('state');
+    echo count($stateCounts) . " unique states\n";
+
+    // ["Electronics" => 150, "Clothing" => 100, ...]
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `dict[str, int]`
+
+### unique()
+
+Returns the unique values of a column in insertion order.
+
+<Tabs>
+  <Tab title="Python">
+    ```python
+    categories = df.unique("category")
+    # ['Electronics', 'Books', 'Clothing', ...]
+
+    print(f"Distinct categories: {len(categories)}")
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const cats = df.unique('category');
+    // ['Alice', 'Bob', 'Charlie', ...]
+    console.log(`Unique: ${cats.length}`);
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $cats = $df->unique('category');
+    // ["Alice", "Bob", "Charlie", ...]
+    echo count($cats) . " unique\n";
+    ```
+  </Tab>
+</Tabs>
+
+**Returns:** `list`
+
+## Complete Analysis Pipeline
+
+```python
+import pardox as px
+from pardox.io import execute_sql
+
+df = px.read_csv("sales_50k.csv")
+df.cast("quantity", "Float64")
+
+# Feature engineering
+revenue_df = df.mul("price", "quantity")
+
+# Aggregations
+print(f"Total revenue : ${df['price'].sum():,.2f}")
+print(f"Avg price     : ${df['price'].mean():,.4f}")
+print(f"Max price     : ${df['price'].max():,.2f}")
+print(f"Revenue std   : {revenue_df.std('result_mul'):,.2f}")
+print(f"Valid rows    : {df['transaction_id'].count():,}")
+
+# EDA inspection
+state_counts  = df.value_counts("state")
+categories    = df.unique("category")
+print(f"\nTop 3 states: {list(state_counts.items())[:3]}")
+print(f"Categories:   {categories}")
+
+# Full export
+records = df.to_dict()
+print(f"\nExported {len(records):,} records to Python list")
+```
+
+## tolist() Method
+
+Convert DataFrame to array of arrays (values only, no column names).
+
+<Tabs>
+  <Tab title="JavaScript">
+    ```javascript
+    const matrix = df.tolist();
+    // [['Alice', 30], ['Bob', 25], ...]
+    ```
+  </Tab>
+  <Tab title="PHP">
+    ```php
+    $matrix = $df->tolist();
+    // [["Alice", 30], ["Bob", 25], ...]
+    ```
+  </Tab>
+</Tabs>
+
+## GroupBy (Roadmap)
+
+Vectorized `groupby` with a Rust hash-aggregation engine is planned for **v0.3.2**.
+
+```python
+# Coming in v0.3.2
+summary = df.groupby("region").agg({
+    "revenue": "sum",
+    "quantity": "mean",
+    "transaction_id": "count"
+})
+```
+
+For now, use `value_counts` for frequency analysis and filter + aggregate on subsets:
+
+```python
+# Workaround: filter then aggregate
+tx_mask = df['state'].eq("TX")
+tx_df   = df.filter(tx_mask)
+print(f"TX revenue: ${tx_df['amount'].sum():,.2f}")
+```

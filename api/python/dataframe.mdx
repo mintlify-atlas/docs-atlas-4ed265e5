@@ -1,0 +1,605 @@
+---
+title: 'DataFrame'
+description: 'High-performance DataFrame class powered by Rust'
+---
+
+## Constructor
+
+### DataFrame()
+
+Initializes a PardoX DataFrame.
+
+<ParamField path="data" type="list | int | ctypes.c_void_p" required>
+  Input data as a list of dictionaries (NDJSON format) or an existing pointer from internal operations
+</ParamField>
+
+<ParamField path="schema" type="dict" default="None">
+  Optional schema definition for the DataFrame
+</ParamField>
+
+```python
+import pardox as pdx
+
+# Create from list of dicts
+df = pdx.DataFrame([
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25}
+])
+```
+
+---
+
+## Display Methods
+
+### head()
+
+Returns a new DataFrame with the first n rows.
+
+<ParamField path="n" type="int" default="5">
+  Number of rows to return
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  A new DataFrame containing the first n rows
+</ResponseField>
+
+```python
+df.head(10)
+```
+
+### tail()
+
+Returns a new DataFrame with the last n rows.
+
+<ParamField path="n" type="int" default="5">
+  Number of rows to return
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  A new DataFrame containing the last n rows
+</ResponseField>
+
+```python
+df.tail(10)
+```
+
+### show()
+
+Prints the first n rows to the console.
+
+<ParamField path="n" type="int" default="10">
+  Number of rows to display
+</ParamField>
+
+```python
+df.show(20)
+```
+
+---
+
+## Properties
+
+### shape
+
+Returns a tuple representing the dimensionality of the DataFrame.
+
+<ResponseField name="return" type="tuple">
+  Format: (rows, columns)
+</ResponseField>
+
+```python
+rows, cols = df.shape
+```
+
+### columns
+
+Returns the column labels of the DataFrame.
+
+<ResponseField name="return" type="list">
+  List of column names
+</ResponseField>
+
+```python
+column_names = df.columns
+```
+
+### dtypes
+
+Returns the data types in the DataFrame.
+
+<ResponseField name="return" type="dict">
+  Dictionary mapping column names to their data types
+</ResponseField>
+
+```python
+types = df.dtypes
+# {"age": "Int64", "price": "Float64", "name": "Utf8"}
+```
+
+---
+
+## Selection & Indexing
+
+### \__getitem__()
+
+Column selection and boolean filtering.
+
+<ParamField path="key" type="str | Series" required>
+  Column name (str) for column selection, or boolean Series for filtering
+</ParamField>
+
+<ResponseField name="return" type="Series | DataFrame">
+  Series for column selection, DataFrame for filtering
+</ResponseField>
+
+```python
+# Column selection
+age_series = df["age"]
+
+# Boolean filtering
+filtered = df[df["age"] > 25]
+```
+
+### iloc
+
+Purely integer-location based indexing for selection by position.
+
+<ResponseField name="return" type="_IlocIndexer">
+  Indexer object that supports slice notation
+</ResponseField>
+
+```python
+# Get rows 100-200
+subset = df.iloc[100:200]
+
+# Get first 50 rows
+first_50 = df.iloc[0:50]
+```
+
+---
+
+## Transformation Methods
+
+### cast()
+
+Casts a column to a new type in-place.
+
+<ParamField path="col_name" type="str" required>
+  Name of the column to cast
+</ParamField>
+
+<ParamField path="target_type" type="str" required>
+  Target data type (e.g., "Int64", "Float64", "Utf8")
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  Self (enables method chaining)
+</ResponseField>
+
+```python
+df.cast("age", "Float64")
+```
+
+### join()
+
+Joins with another PardoX DataFrame using hash join.
+
+<ParamField path="other" type="DataFrame" required>
+  The DataFrame to join with
+</ParamField>
+
+<ParamField path="on" type="str">
+  Column name to join on (used for both left and right)
+</ParamField>
+
+<ParamField path="left_on" type="str">
+  Left DataFrame column name for join
+</ParamField>
+
+<ParamField path="right_on" type="str">
+  Right DataFrame column name for join
+</ParamField>
+
+<ParamField path="how" type="str" default="inner">
+  Join type (currently only "inner" supported)
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  A new DataFrame with the joined result
+</ResponseField>
+
+```python
+# Join on same column name
+result = df1.join(df2, on="user_id")
+
+# Join on different column names
+result = df1.join(df2, left_on="id", right_on="customer_id")
+```
+
+### fillna()
+
+Fills Null/NaN values in the entire DataFrame with the specified scalar. Modifies in-place.
+
+<ParamField path="value" type="int | float" required>
+  Numeric value to replace nulls with
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  Self (enables method chaining)
+</ResponseField>
+
+```python
+df.fillna(0)
+```
+
+### round()
+
+Rounds all numeric columns to the specified number of decimals. Modifies in-place.
+
+<ParamField path="decimals" type="int" default="0">
+  Number of decimal places
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  Self (enables method chaining)
+</ResponseField>
+
+```python
+df.round(2)
+```
+
+### sort_values()
+
+Sort the DataFrame by the named column.
+
+<ParamField path="by" type="str" required>
+  Column name to sort by
+</ParamField>
+
+<ParamField path="ascending" type="bool" default="True">
+  Sort order
+</ParamField>
+
+<ParamField path="gpu" type="bool" default="False">
+  If True, use GPU Bitonic sort pipeline (falls back to CPU if unavailable)
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  A new DataFrame with rows sorted
+</ResponseField>
+
+```python
+# CPU sort
+sorted_df = df.sort_values(by="age", ascending=False)
+
+# GPU-accelerated sort
+sorted_df = df.sort_values(by="price", gpu=True)
+```
+
+---
+
+## Math Operations
+
+### add()
+
+Columnar addition using native Rust SIMD-optimized iterators.
+
+<ParamField path="col_a" type="str" required>
+  First column name
+</ParamField>
+
+<ParamField path="col_b" type="str" required>
+  Second column name
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  New DataFrame with result column "result_math_add"
+</ResponseField>
+
+```python
+result = df.add("price", "tax")
+```
+
+### sub()
+
+Columnar subtraction using native Rust iterators.
+
+<ParamField path="col_a" type="str" required>
+  First column name
+</ParamField>
+
+<ParamField path="col_b" type="str" required>
+  Second column name
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  New DataFrame with result column "result_math_sub"
+</ResponseField>
+
+```python
+result = df.sub("revenue", "cost")
+```
+
+### mul()
+
+Columnar multiplication using native Rust iterators.
+
+<ParamField path="col_a" type="str" required>
+  First column name
+</ParamField>
+
+<ParamField path="col_b" type="str" required>
+  Second column name
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  New DataFrame with result column "result_mul"
+</ResponseField>
+
+```python
+result = df.mul("quantity", "unit_price")
+```
+
+### std()
+
+Native standard deviation of a column (Bessel-corrected sample std dev).
+
+<ParamField path="col" type="str" required>
+  Column name
+</ParamField>
+
+<ResponseField name="return" type="float">
+  Standard deviation value
+</ResponseField>
+
+```python
+std_dev = df.std("age")
+```
+
+### min_max_scale()
+
+Min-Max Scaler: normalizes column values to [0, 1] natively in Rust.
+
+<ParamField path="col" type="str" required>
+  Column name to normalize
+</ParamField>
+
+<ResponseField name="return" type="DataFrame">
+  New DataFrame with normalized column "result_minmax"
+</ResponseField>
+
+```python
+normalized = df.min_max_scale("price")
+```
+
+---
+
+## Inspection & Analysis
+
+### value_counts()
+
+Returns the frequency of each unique value in the given column.
+
+<ParamField path="col" type="str" required>
+  Column name
+</ParamField>
+
+<ResponseField name="return" type="dict">
+  Dictionary with format `{"value": count, ...}` sorted by count descending
+</ResponseField>
+
+```python
+counts = df.value_counts("category")
+```
+
+### unique()
+
+Returns the unique values of the given column in insertion order.
+
+<ParamField path="col" type="str" required>
+  Column name
+</ParamField>
+
+<ResponseField name="return" type="list">
+  List of unique values
+</ResponseField>
+
+```python
+unique_vals = df.unique("user_id")
+```
+
+---
+
+## Export Methods
+
+### to_dict()
+
+Returns all rows as a list of dicts (records format).
+
+<ResponseField name="return" type="list">
+  List of dictionaries `[{col: val, ...}, ...]`
+</ResponseField>
+
+```python
+records = df.to_dict()
+# [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+```
+
+### tolist()
+
+Returns all rows as a list of lists (arrays format).
+
+<ResponseField name="return" type="list">
+  List of lists [[val, val, ...], ...]
+</ResponseField>
+
+```python
+arrays = df.tolist()
+# [["Alice", 30], ["Bob", 25]]
+```
+
+### to_json()
+
+Serializes all rows to a JSON string (records format).
+
+<ResponseField name="return" type="str">
+  JSON array string `"[{...}, ...]"`
+</ResponseField>
+
+```python
+json_str = df.to_json()
+```
+
+### to_csv()
+
+Exports the DataFrame to a CSV file.
+
+<ParamField path="path_or_buf" type="str" required>
+  File path where the CSV will be written
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if successful
+</ResponseField>
+
+```python
+df.to_csv("output.csv")
+```
+
+### to_sql()
+
+Writes the DataFrame to a PostgreSQL table.
+
+<ParamField path="connection_string" type="str" required>
+  PostgreSQL connection string
+</ParamField>
+
+<ParamField path="table_name" type="str" required>
+  Target table name
+</ParamField>
+
+<ParamField path="mode" type="str" default="append">
+  Write mode: "append" or "upsert"
+</ParamField>
+
+<ParamField path="conflict_cols" type="list" default="None">
+  Column names for ON CONFLICT clause (upsert only)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of rows written
+</ResponseField>
+
+```python
+rows = df.to_sql(
+    connection_string="postgresql://user:pass@localhost/db",
+    table_name="customers",
+    mode="upsert",
+    conflict_cols=["customer_id"]
+)
+```
+
+### to_mysql()
+
+Writes the DataFrame to a MySQL table via the Rust native driver.
+
+<ParamField path="connection_string" type="str" required>
+  MySQL URL (e.g. "mysql://user:pass@host:3306/db")
+</ParamField>
+
+<ParamField path="table_name" type="str" required>
+  Target table name
+</ParamField>
+
+<ParamField path="mode" type="str" default="append">
+  Write mode: "append" or "upsert"
+</ParamField>
+
+<ParamField path="conflict_cols" type="list" default="None">
+  Columns for ON DUPLICATE KEY UPDATE (upsert only)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of rows written
+</ResponseField>
+
+```python
+rows = df.to_mysql(
+    connection_string="mysql://user:pass@localhost:3306/db",
+    table_name="orders"
+)
+```
+
+### to_sqlserver()
+
+Writes the DataFrame to a SQL Server table via the Rust native driver (tiberius).
+
+<ParamField path="connection_string" type="str" required>
+  ADO.NET connection string (e.g. "Server=localhost,1433;Database=mydb;User Id=sa;Password=pwd;TrustServerCertificate=true")
+</ParamField>
+
+<ParamField path="table_name" type="str" required>
+  Target table name
+</ParamField>
+
+<ParamField path="mode" type="str" default="append">
+  Write mode: "append" or "upsert"
+</ParamField>
+
+<ParamField path="conflict_cols" type="list" default="None">
+  Columns for MERGE ON clause (upsert only)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of rows written
+</ResponseField>
+
+```python
+rows = df.to_sqlserver(
+    connection_string="Server=localhost;Database=mydb;User Id=sa;Password=pwd",
+    table_name="sales"
+)
+```
+
+### to_mongodb()
+
+Writes the DataFrame to a MongoDB collection via the Rust native driver.
+
+<ParamField path="connection_string" type="str" required>
+  MongoDB URI (e.g. "mongodb://user:pass@host:27017")
+</ParamField>
+
+<ParamField path="db_dot_collection" type="str" required>
+  Target as "database.collection" (e.g. "mydb.orders")
+</ParamField>
+
+<ParamField path="mode" type="str" default="append">
+  Write mode: "append" (insert) or "replace" (drop + insert)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Number of documents inserted
+</ResponseField>
+
+```python
+docs = df.to_mongodb(
+    connection_string="mongodb://localhost:27017",
+    db_dot_collection="analytics.events"
+)
+```
+
+### to_prdx()
+
+Exports the DataFrame to the native PardoX binary format (.prdx). This format supports Zero-Copy loading in future sessions.
+
+<ParamField path="path_or_buf" type="str" required>
+  File path (e.g., 'data.prdx')
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  True if successful
+</ResponseField>
+
+```python
+df.to_prdx("data.prdx")
+```
