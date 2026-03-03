@@ -1,0 +1,128 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "PardoX",
+  "projectDescription": "High-performance DataFrame engine powered by Rust with SDKs for Python, JavaScript, and PHP",
+  "theme": "aspen",
+  "primaryColor": "#000000",
+  "lightColor": "#FF5722",
+  "darkColor": "#D84315",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/data-model"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/io-operations",
+              "guides/database-integration",
+              "guides/data-transformation",
+              "guides/aggregations",
+              "guides/gpu-acceleration",
+              "guides/ml-integration"
+            ]
+          },
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/python",
+              "sdks/javascript",
+              "sdks/php"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Python API",
+            "pages": [
+              "api/python/dataframe",
+              "api/python/series",
+              "api/python/io-functions"
+            ]
+          },
+          {
+            "group": "JavaScript API",
+            "pages": [
+              "api/javascript/dataframe",
+              "api/javascript/series",
+              "api/javascript/io-functions"
+            ]
+          },
+          {
+            "group": "PHP API",
+            "pages": [
+              "api/php/dataframe",
+              "api/php/series",
+              "api/php/io-functions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Zero-copy architecture with SIMD acceleration",
+    "Multi-language SDK support (Python, JavaScript, PHP)",
+    "Native database integration (PostgreSQL, MySQL, SQL Server, MongoDB)",
+    "High-performance I/O with native .prdx format",
+    "GPU-accelerated sorting with CPU fallback",
+    "Zero-copy NumPy and Apache Arrow integration",
+    "Vectorized math operations in pure Rust"
+  ],
+  "publicApiSurface": [
+    "DataFrame",
+    "Series",
+    "read_csv()",
+    "read_prdx()",
+    "from_arrow()",
+    "read_sql()",
+    "read_mysql()",
+    "read_sqlserver()",
+    "read_mongodb()",
+    "df.to_csv()",
+    "df.to_sql()",
+    "df.to_mysql()",
+    "df.to_sqlserver()",
+    "df.to_mongodb()",
+    "df.to_prdx()",
+    "df.to_dict()",
+    "df.to_json()",
+    "df.value_counts()",
+    "df.unique()",
+    "df.add()",
+    "df.sub()",
+    "df.mul()",
+    "df.std()",
+    "df.min_max_scale()",
+    "df.sort_values()",
+    "df.cast()",
+    "df.join()",
+    "df.fillna()",
+    "df.round()",
+    "df.head()",
+    "df.tail()",
+    "df.show()",
+    "execute_sql()",
+    "execute_mysql()",
+    "execute_sqlserver()",
+    "execute_mongodb()"
+  ]
+}
